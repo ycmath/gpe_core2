@@ -410,12 +410,12 @@ class GPEDecoder:
         root_id = payload.generative_payload["root_id"]
         return objs[root_id]
 
-    # ==================================================================
-    # Pure‑python implementation (fallback)
-    # ==================================================================
+# ==================================================================
+# Pure‑python implementation (fallback)
+# ==================================================================
     def _apply_py(self, r: Dict[str, Any], o: Dict[str, Any], m: Dict[str, Dict[str, Any]]):
         op = r["op_code"]
-        elif op == "NEW":
+        if op == "NEW":  # elif → if로 변경
             vid, cls = r["instance_id"], r["class_name"]
             attrs = r.get("attributes", {})
             if "value" in attrs:
@@ -435,7 +435,7 @@ class GPEDecoder:
             else:
                 key = m[c].get("key")
                 if key is not None:  # 추가된 부분
-                parent[key] = child
+                    parent[key] = child  # 들여쓰기 수정
         elif op == "REPEAT":
             for _ in range(r["count"]):
                 tmpl = copy.deepcopy(r["instruction"])
@@ -446,6 +446,7 @@ class GPEDecoder:
                     self._apply_py(tmpl, o, m)
         else:
             raise ValueError(op)
+
 
     # ==================================================================
     # Numba‑accelerated path
