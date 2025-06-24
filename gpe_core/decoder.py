@@ -25,7 +25,6 @@ try:
 except ModuleNotFoundError:  # pragma: no cover
     _NUMBA_AVAIL = False
 
-    # ------------------------------------------------------------------
 class GPEDecoder:
     def decode(self, payload: GpePayload) -> Any:
         try:
@@ -70,59 +69,59 @@ class GPEDecoder:
         except Exception as e:
             raise GPEDecodeError(f"Decoding failed: {e}") from e
 
-# ==================================================================
-# Pure‑python implementation (fallback)
-# ==================================================================
-def _apply_py(self, r: Dict[str, Any], o: Dict[str, Any], m: Dict[str, Dict[str, Any]]):
-    op = r["op_code"]
-    if op == "NEW":
-        vid, cls = r["instance_id"], r["class_name"]
-        attrs = r.get("attributes", {})
-        if "value" in attrs:
-            o[vid] = attrs["value"]
-        elif cls == "dict":
-            o[vid] = {}
-        elif cls == "list":
-            o[vid] = []
-        else:
-            # 클래스 정보 보존
-            o[vid] = {"__class__": cls, "__type__": "custom"}
-        m[vid] = attrs
-    elif op == "APPEND":
-        p, c = r["parent_id"], r["child_id"]
-        if p not in o:
-            raise ValueError(f"Parent {p} not found")
-        if c not in o:
-            raise ValueError(f"Child {c} not found")
-            
-        parent, child = o[p], o[c]
-        if isinstance(parent, list):
-            parent.append(child)
-        elif isinstance(parent, dict):
-            key = m[c].get("key")
-            if key is None:
-                # 키가 없으면 경고 또는 자동 생성
-                import warnings
-                warnings.warn(f"No key found for child {c}, skipping append")
+    # ==================================================================
+    # Pure‑python implementation (fallback)
+    # ==================================================================
+    def _apply_py(self, r: Dict[str, Any], o: Dict[str, Any], m: Dict[str, Dict[str, Any]]):
+        op = r["op_code"]
+        if op == "NEW":
+            vid, cls = r["instance_id"], r["class_name"]
+            attrs = r.get("attributes", {})
+            if "value" in attrs:
+                o[vid] = attrs["value"]
+            elif cls == "dict":
+                o[vid] = {}
+            elif cls == "list":
+                o[vid] = []
             else:
-                parent[key] = child
-        else:
-            raise TypeError(f"Cannot append to {type(parent)}")
-    elif op == "REPEAT":
-        count = r.get("count", 0)
-        if count <= 0:
-            return
-            
-        instruction = r.get("instruction", [])
-        for _ in range(count):
-            tmpl = copy.deepcopy(instruction)
-            if isinstance(tmpl, list):
-                for rule in tmpl:
-                    self._apply_py(rule, o, m)
+                # 클래스 정보 보존
+                o[vid] = {"__class__": cls, "__type__": "custom"}
+            m[vid] = attrs
+        elif op == "APPEND":
+            p, c = r["parent_id"], r["child_id"]
+            if p not in o:
+                raise ValueError(f"Parent {p} not found")
+            if c not in o:
+                raise ValueError(f"Child {c} not found")
+                
+            parent, child = o[p], o[c]
+            if isinstance(parent, list):
+                parent.append(child)
+            elif isinstance(parent, dict):
+                key = m[c].get("key")
+                if key is None:
+                    # 키가 없으면 경고 또는 자동 생성
+                    import warnings
+                    warnings.warn(f"No key found for child {c}, skipping append")
+                else:
+                    parent[key] = child
             else:
-                self._apply_py(tmpl, o, m)
-    else:
-        raise ValueError(f"Unknown operation: {op}")
+                raise TypeError(f"Cannot append to {type(parent)}")
+        elif op == "REPEAT":
+            count = r.get("count", 0)
+            if count <= 0:
+                return
+                
+            instruction = r.get("instruction", [])
+            for _ in range(count):
+                tmpl = copy.deepcopy(instruction)
+                if isinstance(tmpl, list):
+                    for rule in tmpl:
+                        self._apply_py(rule, o, m)
+                else:
+                    self._apply_py(tmpl, o, m)
+        else:
+            raise ValueError(f"Unknown operation: {op}")
 
     # ==================================================================
     # Numba‑accelerated path
@@ -163,6 +162,8 @@ def _apply_py(self, r: Dict[str, Any], o: Dict[str, Any], m: Dict[str, Dict[str,
                                     parent[key] = child
                         elif op == "REPEAT":
                             for _ in range(rule["count"]):
+                                instruction = rule["instruction"]
+                                if not isinstance(instruction, list):
                                     instruction = [instruction]
                                 for sub in instruction:
                                     # NOTE: recursion depth typically shallow; inline for perf
@@ -191,12 +192,11 @@ def _apply_py(self, r: Dict[str, Any], o: Dict[str, Any], m: Dict[str, Dict[str,
                                             # meta에서 key 가져오기
                                             key = meta[cc].get("key")
                                             if key is not None:
-                                              pobj[key] = objs[cc]
+                                                pobj[key] = objs[cc]
             run(seeds, t_objs, t_meta)
             # move back to python dict for downstream
             objs_py.update(t_objs)
             meta_py.update(t_meta)
-
     else:
         def _apply_numba(self, *a, **kw):  # type: ignore[no-redef]
             raise RuntimeError("Numba not installed")
