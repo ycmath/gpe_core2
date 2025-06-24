@@ -728,11 +728,11 @@ def cmd_bench(ns):
     steps = ["encode", "decode"]
     for step in _tqdm(steps, desc="Benchmark", disable=not ns.progress):
         if step == "encode":
-            t0 = time.perf_counter();
+            t0 = time.perf_counter()
             payload = enc.encode(data)
             enc_ms = (time.perf_counter() - t0) * 1000
         else:
-            t0 = time.perf_counter();
+            t0 = time.perf_counter()
             dec.decode(payload)
             dec_ms = (time.perf_counter() - t0) * 1000
 
@@ -740,7 +740,12 @@ def cmd_bench(ns):
         f"n={ns.n:,} | encode {enc_ms:.2f} ms | decode({ns.backend}) {dec_ms:.2f} ms"
     )
 
-():
+    
+# -----------------------------------------------------------------------------
+# Argument parsing
+# -----------------------------------------------------------------------------
+
+def main():
     ap = argparse.ArgumentParser(prog="gpe", description="GPE encode/decode toolkit")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
@@ -763,11 +768,11 @@ def cmd_bench(ns):
     sp = sub.add_parser("bench", help="quick encode/decode benchmark")
     sp.add_argument("--n", type=int, default=10000, help="synthetic record count")
     sp.add_argument("--backend", "-b", default="cpu", choices=list(BACKENDS))
+    sp.add_argument("--progress", action="store_true", help="show progress bar with tqdm")
     sp.set_defaults(func=cmd_bench)
 
     ns = ap.parse_args()
     ns.func(ns)
-
 
 if __name__ == "__main__":
     main()
