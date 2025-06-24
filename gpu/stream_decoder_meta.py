@@ -52,22 +52,26 @@ class GPEDecoderGPUStreamFull:
         # 2) GPU graph assembly
         d_type, d_head, d_next, d_key = gpu_assemble(chunk, ids_a, ids_b)
 
-        # 3) Host-side final Python objects
-        lut_key_blob = "|".join(chunk["lut_key"]).encode() + b"|"  # simple concat
-        lut_key_off = np.fromiter(
+        # key LUT 준비 (host copy once)
+        key_blob = "|".join(chunk["lut_key"]).encode() + b"|"
+        key_off  = np.fromiter(
             (0, *np.cumsum([len(k) + 1 for k in chunk["lut_key"]])),
             dtype=np.uint32,
         )
+
+        d_type, d_head, d_next, d_key = gpu_assemble(chunk, ids_a, ids_b)
+
         objs = cupy_graph_to_py(
             d_type, d_head, d_next, d_key,
             chunk["lut_cls"],
-            lut_key_blob,
-            lut_key_off,
+            key_blob,
+            key_off,
         )
 
         root_text = payload.generative_payload["root_id"]   # "n00000xxx"
         root_idx = int(root_text[1:], 10)
         return objs[root_idx]
+
 
 ## lut_key_blob 간단화: 키를 | 구분자로 이어붙여 offset 계산 → 필요 시 UTF-8 safe concat으로 개선 가능.
 ## 이제 gpu-full 백엔드는 Host Python 루프 없이 GPU → Host 단일 전송만으로 완전 복원이 이루어집니다.
