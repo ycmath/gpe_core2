@@ -14,10 +14,9 @@ except ModuleNotFoundError:
         _fast_hash = lambda b: hashlib.sha1(b).digest()
 
 class ASTBuilder:
-    _ctr = count()
-    
     def __init__(self):
         self.nodes: Dict[str, ASTNode] = {}
+        self._ctr = count()  # 인스턴스 변수로 이동
     
     def build(self, obj: Any) -> str:
         return self._visit(obj, None)
