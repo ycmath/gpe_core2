@@ -365,14 +365,19 @@ class GPEEncoder:
 """Reference decoder + optional **Numba‑accelerated rule loop**.
 
 * If `numba` is present, the inner rule‑iteration is delegated to a JIT
-  function that operates on `typed.Dict` / `typed.List` structures, giving
+  function that operates on typed.Dict / typed.List structures, giving
   ~2‑3× speed‑up on large seed lists (≥100k rules).
+* Adds **GPEDecodeError** for robust fallback‑JSON parsing.
 """
 from __future__ import annotations
 import json, copy
 from typing import Dict, Any, List
 
 from .models import GpePayload
+
+# ---------------------------------------------------------------------------
+class GPEDecodeError(RuntimeError):
+    """Raised when a GPE payload cannot be decoded (e.g., fallback JSON corrupt)."""
 
 # ---------------------------------------------------------------------------
 try:
@@ -386,6 +391,15 @@ class GPEDecoder:
 
     # ------------------------------------------------------------------
     def decode(self, payload: GpePayload) -> Any:
+        # 0) fallback JSON with robust error handling
+        fb = payload.fallback_payload
+        if fb and fb.get("json"):
+            try:
+                return json.loads(fb["json"])
+            except json.JSONDecodeError as e:
+                raise GPEDecodeError(f"Fallback JSON 파싱 실패: {e}") from e
+
+        # 1) prepare containers
         # 0) fallback JSON
         fb = payload.fallback_payload
         if fb and fb.get("json"):
