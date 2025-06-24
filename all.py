@@ -707,7 +707,14 @@ def cmd_decode(ns):
 
 
 def cmd_bench(ns):
+    """Benchmark encode → decode with optional progress bar."""
     from random import randint
+    try:
+        from tqdm import tqdm  # type: ignore
+        _tqdm = tqdm  # real progress bar
+    except ModuleNotFoundError:  # pragma: no cover
+        def _tqdm(iterable=None, **kw):
+            return iterable  # no‑op iterator
 
     # synthetic dataset
     data = [
@@ -716,25 +723,24 @@ def cmd_bench(ns):
     ]
 
     enc = GPEEncoder(include_fallback=False)
-    t0 = time.perf_counter()
-    payload = enc.encode(data)
-    enc_ms = (time.perf_counter() - t0) * 1000
-
     dec = _get_decoder(ns.backend)
-    t0 = time.perf_counter()
-    dec.decode(payload)
-    dec_ms = (time.perf_counter() - t0) * 1000
+
+    steps = ["encode", "decode"]
+    for step in _tqdm(steps, desc="Benchmark", disable=not ns.progress):
+        if step == "encode":
+            t0 = time.perf_counter();
+            payload = enc.encode(data)
+            enc_ms = (time.perf_counter() - t0) * 1000
+        else:
+            t0 = time.perf_counter();
+            dec.decode(payload)
+            dec_ms = (time.perf_counter() - t0) * 1000
 
     print(
         f"n={ns.n:,} | encode {enc_ms:.2f} ms | decode({ns.backend}) {dec_ms:.2f} ms"
     )
 
-
-# -----------------------------------------------------------------------------
-# Argument parsing
-# -----------------------------------------------------------------------------
-
-def main():
+():
     ap = argparse.ArgumentParser(prog="gpe", description="GPE encode/decode toolkit")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
@@ -767,6 +773,11 @@ if __name__ == "__main__":
     main()
 
 
+## tqdm 가 설치되어 있으면 실제 진행률 바, 없으면 no-op.
+## 사용법:
+## bash
+## gpe bench --n 20000 --progress
+## tqdm 미설치 환경에서도 문제없이 작동합니다.
 
 ################################################################################
 # gpe_core/vectorizer_hybrid.py
@@ -1601,6 +1612,100 @@ class GPEDecoderGPU_Ray:
         root_text = payload.generative_payload["root_id"]
         root_idx = int(root_text[1:], 10)
         return objs_global[root_idx]
+
+
+
+################################################################################
+# gpe_core/utils_profile.py
+################################################################################
+
+# gpe_core/utils_profile.py
+# ------------------------------------------------------------
+"""Lightweight 프로파일링 헬퍼.
+
+사용 예:
+    from gpe_core.utils_profile import profile_section
+
+    with profile_section("encode"):
+        payload = enc.encode(data)
+
+활성화 방법:
+    • 환경변수 GPE_PROFILE=1
+    • 또는 코드에서 utils_profile.PROFILING_ENABLED = True
+"""
+
+import os
+import cProfile
+import pstats
+from contextlib import contextmanager
+from io import StringIO
+from time import perf_counter
+
+PROFILING_ENABLED: bool = bool(int(os.getenv("GPE_PROFILE", "0")))
+
+
+@contextmanager
+def profile_section(name: str):
+    if not PROFILING_ENABLED:
+        yield
+        return
+
+    pr = cProfile.Profile()
+    pr.enable()
+    t0 = perf_counter()
+    try:
+        yield
+    finally:
+        dt = perf_counter() - t0
+        pr.disable()
+        s = StringIO()
+        ps = pstats.Stats(pr, stream=s).sort_stats("cumulative")
+        ps.print_stats(20)  # 상위 20개 함수
+        print(f"\n=== [{name}] {dt*1000:.1f} ms  Profile ===")
+        print(s.getvalue())
+        
+################################################################################
+## 간단 통합 예시
+
+from gpe_core.utils_profile import profile_section
+
+def cmd_bench(ns):
+    ...
+    with profile_section("encode"):
+        payload = enc.encode(data)
+    with profile_section("decode"):
+        dec.decode(payload)
+        
+## GPE_PROFILE=1 gpe bench ... 처럼 실행하면 섹션별 누적 함수 시간이 콘솔에 출력됩니다.
+## 기본(환경변수 없을 때)은 오버헤드 없이 작동합니다.
+
+################################################################################
+# 
+################################################################################
+
+
+
+################################################################################
+# 
+################################################################################
+
+
+
+################################################################################
+# 
+################################################################################
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
