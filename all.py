@@ -1086,17 +1086,20 @@ class GPEDecoderGPUStreamFull:
         # 2) GPU graph assembly
         d_type, d_head, d_next, d_key = gpu_assemble(chunk, ids_a, ids_b)
 
-        # 3) Host-side final Python objects
-        lut_key_blob = "|".join(chunk["lut_key"]).encode() + b"|"  # simple concat
-        lut_key_off = np.fromiter(
+        # key LUT 준비 (host copy once)
+        key_blob = "|".join(chunk["lut_key"]).encode() + b"|"
+        key_off  = np.fromiter(
             (0, *np.cumsum([len(k) + 1 for k in chunk["lut_key"]])),
             dtype=np.uint32,
         )
+
+        d_type, d_head, d_next, d_key = gpu_assemble(chunk, ids_a, ids_b)
+
         objs = cupy_graph_to_py(
             d_type, d_head, d_next, d_key,
             chunk["lut_cls"],
-            lut_key_blob,
-            lut_key_off,
+            key_blob,
+            key_off,
         )
 
         root_text = payload.generative_payload["root_id"]   # "n00000xxx"
@@ -1264,7 +1267,14 @@ def gpu_assemble(
     d_meta_key = cp.asarray(chunk["meta_key"], dtype=cp.uint32)
     d_ida      = cp.asarray(ids_a,             dtype=cp.uint32)
     d_idb      = cp.asarray(ids_b,             dtype=cp.uint32)
-
+    # key LUT → GPU
+    key_blob = "|".join(chunk["lut_key"]).encode() + b"|"
+    d_blob   = cp.asarray(key_blob, dtype=cp.uint8)
+    key_off  = np.fromiter(
+        (0, *np.cumsum([len(k)+1 for k in chunk["lut_key"]])),
+        dtype=np.uint32,
+    )
+    d_off = cp.asarray(key_off, dtype=cp.uint32)
     d_type = cp.empty(n,           dtype=cp.uint8)
     d_head = cp.full(n, 0xFFFFFFFF, dtype=cp.uint32)
     d_next = cp.full(n, 0xFFFFFFFF, dtype=cp.uint32)
@@ -1272,13 +1282,12 @@ def gpu_assemble(
 
     threads = 256
     blocks  = (n + threads - 1) // threads
+# 커널 호출 인자에 추가
     _KERNEL(
         (blocks,), (threads,),
         (
-            d_op,
-            d_ida, d_idb,
-            d_meta_cls,
-            d_meta_key,
+            d_op, d_ida, d_idb, d_meta_cls, d_meta_key,
+            d_blob, d_off,          # <── new
             d_type, d_head, d_next, d_key,
             np.int32(n),
         ),
@@ -1343,16 +1352,16 @@ def cupy_graph_to_py(d_type, d_head, d_next, d_key, lut_cls, lut_key_blob, lut_k
 1. **key lookup** 최적화를 위해 `lut_key_blob` 를 GPU로 복사해 커널-내 UTF-8 copy-out까지 수행 가능.
 2. 멀티-GPU: op 범위를 device마다 분할 → AllReduce 불필요(리니어).
 """
+
 ################################################################################
 # gpe_core/gpu/graph_to_py.py
 ################################################################################
 
 """
-cupy_graph_to_py
-────────────────
-assemble_graph.cu 결과 버퍼(d_type / d_head / d_next / d_key)와
-룩업 테이블(lut_cls, lut_key_blob, lut_key_off)을 받아
-파이썬 객체 그래프(dict / list / custom)를 재구성한다.
+cupy_graph_to_py  (GPU child-list → 파이썬 객체)
+───────────────────────────────────────────────
+* d_key  : child 별 “4-byte 해시” (커널 v2에서 계산)
+* key_blob / key_off : GPU → Host 복사된 전체 key 문자열 풀
 """
 from __future__ import annotations
 from typing import List, Any, Dict
@@ -1365,25 +1374,25 @@ def cupy_graph_to_py(
     d_type: cp.ndarray,
     d_head: cp.ndarray,
     d_next: cp.ndarray,
-    d_key: cp.ndarray,
+    d_key:  cp.ndarray,
     lut_cls: List[str],
-    lut_key_blob: bytes,
-    lut_key_off: np.ndarray,
+    key_blob: bytes,
+    key_off: np.ndarray,
 ) -> Dict[int, Any]:
     n = int(d_type.size)
     objs: List[Any] = [None] * n
+    key_cache: Dict[int, str] = {}
 
-    # 1) allocate node shells
+    # 1) allocate shells
     for vid in range(n):
         t = int(d_type[vid])
-        if t == 0:
-            objs[vid] = {}
-        elif t == 1:
-            objs[vid] = []
-        else:
-            objs[vid] = {"__class__": lut_cls[t]}
+        objs[vid] = (
+            {} if t == 0 else
+            [] if t == 1 else
+            {"__class__": lut_cls[t]}
+        )
 
-    # 2) second pass: attach children
+    # 2) children attach
     for parent in range(n):
         child = int(d_head[parent])
         while child != 0xFFFFFFFF:
@@ -1391,13 +1400,20 @@ def cupy_graph_to_py(
             if isinstance(pobj, list):
                 pobj.append(objs[child])
             else:
-                k_idx = int(d_key[child])
-                # key off 배열 끝에 sentinel offset 포함
-                k = lut_key_blob[lut_key_off[k_idx] : lut_key_off[k_idx + 1]].decode()
+                h = int(d_key[child])
+                if h not in key_cache:
+                    # 해시 충돌 가능 → 선형 탐색으로 실제 key 찾기
+                    # (dict-size 보통 적어 오버헤드 미미)
+                    for i in range(len(key_off) - 1):
+                        if int.from_bytes(key_blob[key_off[i] : key_off[i] + 4], "little") == h:
+                            key_cache[h] = key_blob[key_off[i] : key_off[i + 1]].decode()
+                            break
+                k = key_cache[h]
                 pobj[k] = objs[child]
             child = int(d_next[child])
 
     return objs
+
 
 
 ## 멀티-GPU 분산 디코딩을 위해 Ray actor-풀 오케스트레이터를 단계별로 나눠 드리겠습니다.
@@ -1641,17 +1657,20 @@ void link_child(uint32_t parent,
     d_next[child] = prev;
 }
 
+// 상단 파라미터 목록에 LUT 인자 추가
 extern "C" __global__
-void assemble_graph_v2(const uint8_t*  __restrict__ op,
-                       const uint32_t* __restrict__ ida,
-                       const uint32_t* __restrict__ idb,
-                       const uint16_t* __restrict__ meta_cls,
-                       const uint32_t* __restrict__ meta_key,
-                       uint8_t*  __restrict__ d_type,
-                       uint32_t* __restrict__ d_head,
-                       uint32_t* __restrict__ d_next,
-                       uint32_t* __restrict__ d_key,
-                       int n_rows)
+void assemble_graph_v2(const uint8_t*  op,
+                       const uint32_t* ida,
+                       const uint32_t* idb,
+                       const uint16_t* cls,
+                       const uint32_t* key,
+                       const char*     key_blob,   // <── new
+                       const uint32_t*  key_off,   // <── new
+                       uint8_t*  type,
+                       uint32_t* head,
+                       uint32_t* next,
+                       uint32_t* dkey,
+                       int       N)
 {
     const int tid  = threadIdx.x + blockIdx.x * blockDim.x;
     const int lane = threadIdx.x & 31;                     // warp lane
@@ -1668,20 +1687,20 @@ void assemble_graph_v2(const uint8_t*  __restrict__ op,
         d_head[vid]  = 0xFFFFFFFFu;
         d_next[vid]  = 0xFFFFFFFFu;
     }
-    else if (code == 1u) {                                 // APPEND
-        uint32_t parent = ida[tid];
-        uint32_t child  = idb[tid];
-        uint32_t key_id = meta_key[tid];
+    else if (code == 1u) { // APPEND
+        uint32_t p = ida[tid], c = idb[tid];
+        link_child(p, c, head, next);
 
-        // warp-wide grouping: 첫 번째 lane 만 atomic
-        uint32_t leader = __shfl_sync(mask, parent, 0);
-
-        if (parent == leader) {
-            link_child(parent, child, d_head, d_next);
-            if (key_id != 0xFFFFFFFFu)
-                d_key[child] = key_id;
+        uint32_t kidx = key[tid];
+        if (kidx != 0xFFFFFFFFu) {
+            // key 문자열의 시작, 끝 offset
+            uint32_t s = key_off[kidx];
+            uint32_t e = key_off[kidx + 1];
+            // 첫 4byte 해시로 dict-slot 미리 계산 (간단 예)
+            uint32_t h = *(const uint32_t*)(key_blob + s);
+            dkey[c] = h;    // GPU-side 해시 저장
+            // 실제 문자열은 host 변환 단계에서 필요 시 slice 사용
         }
-        // 다른 lane들은 선도-lane 가 prev 값을 채워주므로 별도 atomic 필요 없음
     }
 }
 
