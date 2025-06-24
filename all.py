@@ -619,6 +619,13 @@ try:
 except Exception:
     pass
 
+# ── Multi‑GPU (Ray) 백엔드 ───────────────────────────────────────────────
+try:
+    from .gpu_multi.multi_decoder import GPEDecoderGPU_Ray  # type: ignore
+    BACKENDS["gpu-ray"] = GPEDecoderGPU_Ray
+except Exception:
+    pass
+
 # -----------------------------------------------------------------------------
 # Helper I/O
 # -----------------------------------------------------------------------------
@@ -744,6 +751,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 ################################################################################
