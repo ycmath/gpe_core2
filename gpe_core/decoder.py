@@ -142,12 +142,12 @@ class GPEDecoder:
                             vid = rule["instance_id"]
                             cls = rule["class_name"]
                             attrs = rule.get("attributes", {})
-                            if "value" in attrs:
-                                objs[vid] = attrs["value"]
-                            elif cls == "dict":
-                                objs[vid] = {}
+                            if cls == "dict":
+                                objs[vid] = {} if attrs.get("value") is None else attrs["value"]
                             elif cls == "list":
-                                objs[vid] = []
+                                objs[vid] = [] if attrs.get("value") is None else attrs["value"]
+                            elif "value" in attrs:
+                                objs[vid] = attrs["value"]
                             else:
                                 objs[vid] = {"__class__": cls, "__type__": "custom"}
                             meta[vid] = attrs
@@ -173,12 +173,12 @@ class GPEDecoder:
                                         cls = sub["class_name"]
                                         attrs = sub.get("attributes", {})
                                         # Python 경로와 일관성 있게 수정
-                                        if "value" in attrs:
-                                            objs[vid] = attrs["value"]
-                                        elif cls == "dict":
-                                            objs[vid] = {}
+                                        if cls == "dict":
+                                            objs[vid] = {} if attrs.get("value") is None else attrs["value"]
                                         elif cls == "list":
-                                            objs[vid] = []
+                                            objs[vid] = [] if attrs.get("value") is None else attrs["value"]
+                                        elif "value" in attrs:
+                                            objs[vid] = attrs["value"]
                                         else:
                                             objs[vid] = {"__class__": cls, "__type__": "custom"}
                                         meta[vid] = attrs
