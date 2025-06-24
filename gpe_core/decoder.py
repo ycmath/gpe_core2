@@ -56,7 +56,7 @@ class GPEDecoder:
     # ==================================================================
     def _apply_py(self, r: Dict[str, Any], o: Dict[str, Any], m: Dict[str, Dict[str, Any]]):
         op = r["op_code"]
-        if op == "NEW":
+        elif op == "NEW":
             vid, cls = r["instance_id"], r["class_name"]
             attrs = r.get("attributes", {})
             if "value" in attrs:
@@ -66,7 +66,7 @@ class GPEDecoder:
             elif cls == "list":
                 o[vid] = []
             else:
-                o[vid] = {"__class__": cls}
+                o[vid] = {} 
             m[vid] = attrs
         elif op == "APPEND":
             p, c = r["parent_id"], r["child_id"]
@@ -75,6 +75,7 @@ class GPEDecoder:
                 parent.append(child)
             else:
                 key = m[c].get("key")
+                if key is not None:  # 추가된 부분
                 parent[key] = child
         elif op == "REPEAT":
             for _ in range(r["count"]):
