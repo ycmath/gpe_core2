@@ -77,16 +77,16 @@ class GPEDecoder:
         if op == "NEW":
             vid, cls = r["instance_id"], r["class_name"]
             attrs = r.get("attributes", {})
-            if "value" in attrs:
-                o[vid] = attrs["value"]
-            elif cls == "dict":
-                o[vid] = {}
+            if cls == "dict":
+                o[vid] = {} if attrs.get("value") is None else attrs["value"]
             elif cls == "list":
-                o[vid] = []
+                o[vid] = [] if attrs.get("value") is None else attrs["value"]
+            elif "value" in attrs:
+                o[vid] = attrs["value"]
             else:
-                # 클래스 정보 보존
                 o[vid] = {"__class__": cls, "__type__": "custom"}
             m[vid] = attrs
+        # 이하 생략
         elif op == "APPEND":
             p, c = r["parent_id"], r["child_id"]
             if p not in o:
