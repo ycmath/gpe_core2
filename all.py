@@ -392,10 +392,14 @@ class GPEDecoderMP_ShMem(GPEDecoder):
 ################################################################################
 # gpe_core/cli.py
 ################################################################################
-"""Command‑line interface: gpe encode / decode / bench"""
+"""Command‑line interface: **gpe encode / decode / bench**"""
 from __future__ import annotations
+
+import argparse
+import json
+import sys
+import time
 from pathlib import Path
-import argparse, time, json, sys
 from typing import Dict
 
 from .encoder import GPEEncoder
@@ -404,42 +408,69 @@ from .decoder import GPEDecoder
 from .decoder_mp import GPEDecoderMP
 from .decoder_mp_shm import GPEDecoderMP_ShMem
 
-# Optional GPU backend
-BACKENDS: Dict[str, type] = {
-    "cpu": GPEDecoder,
-    "mp": GPEDecoderMP,
-    "mp-shm": GPEDecoderMP_ShMem,
+# -----------------------------------------------------------------------------
+# Back‑end registry
+# -----------------------------------------------------------------------------
+BACKENDS: Dict[str, type[GPEDecoder]] = {
+    "cpu":     GPEDecoder,
+    "mp":      GPEDecoderMP,
+    "mp-shm":  GPEDecoderMP_ShMem,
 }
+
+# ── GPU: ID 재매핑까지 (객체 복원은 CPU) ─────────────────────────────────────
 try:
     from .gpu.stream_decoder import GPEDecoderGPUStream  # type: ignore
     BACKENDS["gpu-stream"] = GPEDecoderGPUStream
 except Exception:
     pass
 
-# -------------------------------------------------------------------------
+# ── GPU: 메타까지 완전 복원 ─────────────────────────────────────────────────
+try:
+    from .gpu.stream_decoder_meta import GPEDecoderGPUStreamFull  # type: ignore
+    BACKENDS["gpu-full"] = GPEDecoderGPUStreamFull
+except Exception:
+    pass
+
+# -----------------------------------------------------------------------------
+# Helper I/O
+# -----------------------------------------------------------------------------
 
 def _load_json(path: Path):
     return json.loads(path.read_text(encoding="utf-8"))
 
-def _dump_json(obj, path: Path):
-    path.write_text(json.dumps(obj, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
 
-# -------------------------------------------------------------------------
+def _dump_json(obj, path: Path):
+    path.write_text(
+        json.dumps(obj, ensure_ascii=False, separators=(",", ":")), encoding="utf-8"
+    )
+
+
+# -----------------------------------------------------------------------------
+# Decoder factory
+# -----------------------------------------------------------------------------
 
 def _get_decoder(name: str):
     if name not in BACKENDS:
-        sys.exit(f"❌  unknown backend '{name}' (choose from {', '.join(BACKENDS)})")
+        sys.exit(f"❌ unknown backend '{name}' (choose from {', '.join(BACKENDS)})")
     return BACKENDS[name]()
 
-# -------------------------------------------------------------------------
+
+# -----------------------------------------------------------------------------
+# Commands
+# -----------------------------------------------------------------------------
 
 def cmd_encode(ns):
     data = _load_json(ns.input)
-    enc  = GPEEncoder(include_fallback=not ns.no_fallback)
-    t0 = time.perf_counter(); payload = enc.encode(data); enc_ms = (time.perf_counter()-t0)*1000
+    enc = GPEEncoder(include_fallback=not ns.no_fallback)
+
+    t0 = time.perf_counter()
+    payload = enc.encode(data)
+    enc_ms = (time.perf_counter() - t0) * 1000
+
     print(f"✓ encoded in {enc_ms:.2f} ms → {ns.output}")
     obj = payload.generative_payload if ns.strip else payload.__dict__
     _dump_json(obj, ns.output)
+
 
 
 def cmd_decode(ns):
@@ -447,53 +478,81 @@ def cmd_decode(ns):
     if "generative_payload" in raw:
         payload = GpePayload(**raw)  # type: ignore[arg-type]
     else:
-        payload = GpePayload(payload_type="gpe.v1", generative_payload={}, fallback_payload={"json": json.dumps(raw)})
+        payload = GpePayload(
+            payload_type="gpe.v1",
+            generative_payload={},
+            fallback_payload={"json": json.dumps(raw)},
+        )
 
     dec = _get_decoder(ns.backend)
-    t0 = time.perf_counter(); data = dec.decode(payload); dec_ms = (time.perf_counter()-t0)*1000
-    print(f"✓ decoded in {dec_ms:.2f} ms using backend '{ns.backend}' → {ns.output}")
+
+    t0 = time.perf_counter()
+    data = dec.decode(payload)
+    dec_ms = (time.perf_counter() - t0) * 1000
+
+    print(
+        f"✓ decoded in {dec_ms:.2f} ms using backend '{ns.backend}' → {ns.output}"
+    )
     _dump_json(data, ns.output)
+
 
 
 def cmd_bench(ns):
     from random import randint
-    data = [{"x": randint(0,9), "y": [randint(0,9) for _ in range(5)]} for _ in range(ns.n)]
+
+    # synthetic dataset
+    data = [
+        {"x": randint(0, 9), "y": [randint(0, 9) for _ in range(5)]}
+        for _ in range(ns.n)
+    ]
+
     enc = GPEEncoder(include_fallback=False)
+    t0 = time.perf_counter()
     payload = enc.encode(data)
+    enc_ms = (time.perf_counter() - t0) * 1000
 
     dec = _get_decoder(ns.backend)
-    t0 = time.perf_counter(); enc.encode(data); enc_ms = (time.perf_counter()-t0)*1000
-    t0 = time.perf_counter(); dec.decode(payload); dec_ms = (time.perf_counter()-t0)*1000
-    print(f"n={ns.n:,} | encode {enc_ms:.2f} ms | decode({ns.backend}) {dec_ms:.2f} ms")
+    t0 = time.perf_counter()
+    dec.decode(payload)
+    dec_ms = (time.perf_counter() - t0) * 1000
 
-# -------------------------------------------------------------------------
+    print(
+        f"n={ns.n:,} | encode {enc_ms:.2f} ms | decode({ns.backend}) {dec_ms:.2f} ms"
+    )
+
+
+# -----------------------------------------------------------------------------
+# Argument parsing
+# -----------------------------------------------------------------------------
 
 def main():
     ap = argparse.ArgumentParser(prog="gpe", description="GPE encode/decode toolkit")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
-    # encode
+    # encode ---------------------------------------------------------
     sp = sub.add_parser("encode", help="JSON → GPE payload")
-    sp.add_argument("--input",  "-i", type=Path, required=True)
+    sp.add_argument("--input", "-i", type=Path, required=True)
     sp.add_argument("--output", "-o", type=Path, required=True)
     sp.add_argument("--no-fallback", action="store_true", help="omit raw JSON fallback")
-    sp.add_argument("--strip",        action="store_true", help="save only generative_payload")
+    sp.add_argument("--strip", action="store_true", help="save only generative_payload")
     sp.set_defaults(func=cmd_encode)
 
-    # decode
+    # decode ---------------------------------------------------------
     sp = sub.add_parser("decode", help="GPE payload → JSON")
-    sp.add_argument("--input",  "-i", type=Path, required=True)
+    sp.add_argument("--input", "-i", type=Path, required=True)
     sp.add_argument("--output", "-o", type=Path, required=True)
-    sp.add_argument("--backend","-b", default="cpu", choices=list(BACKENDS))
+    sp.add_argument("--backend", "-b", default="cpu", choices=list(BACKENDS))
     sp.set_defaults(func=cmd_decode)
 
-    # bench
-    sp = sub.add_parser("bench",  help="quick encode/decode benchmark")
+    # bench ----------------------------------------------------------
+    sp = sub.add_parser("bench", help="quick encode/decode benchmark")
     sp.add_argument("--n", type=int, default=10000, help="synthetic record count")
-    sp.add_argument("--backend","-b", default="cpu", choices=list(BACKENDS))
+    sp.add_argument("--backend", "-b", default="cpu", choices=list(BACKENDS))
     sp.set_defaults(func=cmd_bench)
 
-    ns = ap.parse_args(); ns.func(ns)
+    ns = ap.parse_args()
+    ns.func(ns)
+
 
 if __name__ == "__main__":
     main()
@@ -615,78 +674,218 @@ def run_remap(chunk: dict[str, np.ndarray]) -> tuple[np.ndarray, np.ndarray]:
 ################################################################################
 # gpe_core/gpu/stream_decoder.py
 ################################################################################
-
 from __future__ import annotations
-import cupy as cp, numpy as np, json
-from typing import List, Dict, Any, Iterable
+
+import cupy as cp
+import numpy as np
+import json
+from typing import Iterable, Any, Dict
+
 from ..models import GpePayload
 from ..vectorizer_hybrid import hybrid_flatten
 from .id_remap_opt import run_remap
+from ..decoder import GPEDecoder
 
 
 class GPEDecoderGPUStream:
-    """Chunk-stream GPU decoder (no CPU fallback hack)."""
+    """GPU remap + CPU 객체 재구성 (단순 스트리밍)."""
 
     def __init__(self, vram_frac: float = 0.7):
         self.vram_frac = vram_frac
 
     # ------------------------------------------------------------------
     def decode(self, payload: GpePayload) -> Any:
-        # ── 0) fallback 우선 ────────────────────────────────────────────
+        # 0) fallback JSON 우선
         fb = payload.fallback_payload
         if fb and fb.get("json"):
             return json.loads(fb["json"])
 
-        # ── 1) flatten → hybrid arrays ────────────────────────────────
+        # 1) seeds → hybrid 배열(flatten)
         seeds = payload.generative_payload["seeds"]
         chunk = hybrid_flatten(seeds)
-        op  = chunk["op"]
-        tot = op.size
 
-        # ── 2) GPU remap (chunked) ────────────────────────────────────
+        op   = chunk["op"]
+        total = op.size
+
+        # 2) chunk 크기 계산 (GPU VRAM 70 % 정도 사용)
         free, _ = cp.cuda.runtime.memGetInfo()
-        rows_per = max(int((free * self.vram_frac)//(op.itemsize*4)), 256_000)
+        rows_per = max(int((free * self.vram_frac) // (op.itemsize * 4)), 256_000)
 
-        def ranges(n, step) -> Iterable[range]:
+        def ranges(n: int, step: int) -> Iterable[range]:
             s = 0
             while s < n:
-                e = min(s+step, n)
+                e = min(s + step, n)
                 yield range(s, e)
                 s = e
 
-        ids_a = np.empty(tot, dtype=np.uint32)
-        ids_b = np.empty(tot, dtype=np.uint32)
+        ids_a = np.empty(total, dtype=np.uint32)
+        ids_b = np.empty(total, dtype=np.uint32)
 
-        for r in ranges(tot, rows_per):
+        # 3) GPU remap — chunk 단위
+        for r in ranges(total, rows_per):
             sub = {k: (v[r] if k.startswith(("op", "mask")) else v)
                    for k, v in chunk.items()}
             a, b = run_remap(sub)
             ids_a[r], ids_b[r] = a, b
 
-        # ── 3) 배열 → 객체 그래프 재구성 ────────────────────────────────
-        objs: Dict[int, Any]  = {}
-        meta: Dict[int, Dict[str, Any]] = {}
+        # 4) CPU 디코더로 최종 객체 그래프 재구성
+        #    (ids 배열은 payload 에 임시 주입)
+        payload.generative_payload["hybrid_ids_a"] = ids_a.tolist()
+        payload.generative_payload["hybrid_ids_b"] = ids_b.tolist()
 
-        for i in range(tot):
+        return GPEDecoder().decode(payload)
+
+################################################################################
+# gpe_core/gpu/vectorizer_hybrid_meta.py
+################################################################################
+
+"""
+hybrid_flatten_meta(seeds)  →  dict(op, mask_a, pool16_a, …, meta_cls, meta_key)
+- meta_cls :  uint16 배열  (NEW 행마다 class_name 사전 index)
+- meta_key :  uint32 배열  (APPEND child 행마다 key 사전 index)
+- lut_cls   :  List[str]   index → class_name
+- lut_key   :  List[str]   index → dict-key string
+"""
+from __future__ import annotations
+import numpy as np
+from typing import Dict, List, Tuple, Any
+from .vectorizer_hybrid import build_pools
+from .vectorizer import vectorize_seeds, OP_NEW, OP_APPEND
+
+def hybrid_flatten_meta(seeds: List[Dict[str, Any]]):
+    op, a, b, _ = vectorize_seeds(seeds)
+
+    meta_cls = np.full(op.shape, 0xFFFF, np.uint16)   # default sentinel
+    meta_key = np.full(op.shape, 0xFFFFFFFF, np.uint32)
+
+    lut_cls: List[str] = []
+    lut_key: List[str] = []
+
+    def add(cls: str, table: List[str]) -> int:
+        try:
+            return table.index(cls)
+        except ValueError:
+            table.append(cls)
+            return len(table)-1
+
+    row = 0
+    for s in seeds:
+        for r in s["rules"]:
+            if r["op_code"] == "NEW":
+                idx = add(r["class_name"], lut_cls)
+                meta_cls[row] = idx
+            elif r["op_code"] == "APPEND":
+                k = r.get("attribute_name") or r.get("key")
+                idx = add(k, lut_key)
+                meta_key[row] = idx
+            row += 1
+
+    masks_a, p16a, p32a = build_pools(a)
+    masks_b, p16b, p32b = build_pools(b)
+
+    return dict(
+        op=op,
+        mask_a=masks_a, mask_b=masks_b,
+        pool16_a=p16a, pool32_a=p32a,
+        pool16_b=p16b, pool32_b=p32b,
+        meta_cls=meta_cls,
+        meta_key=meta_key,
+        lut_cls=lut_cls,
+        lut_key=lut_key,
+    )
+
+################################################################################
+# gpe_core/gpu/stream_decoder_meta.py
+################################################################################
+from __future__ import annotations
+
+import cupy as cp
+import numpy as np
+import json
+from typing import Any, Dict, Iterable
+
+from ..models import GpePayload
+from ..vectorizer_hybrid_meta import hybrid_flatten_meta, OP_NEW, OP_APPEND
+from .id_remap_opt import run_remap
+
+
+class GPEDecoderGPUStreamFull:
+    """GPU-based ID 재매핑 + 메타를 이용한 완전 복원 디코더."""
+
+    def __init__(self, vram_frac: float = 0.7) -> None:
+        self.vram_frac = vram_frac
+
+    # ----------------------------------------------------------------------
+    def decode(self, payload: GpePayload) -> Any:
+        # 0) fallback JSON 우선
+        if payload.fallback_payload and payload.fallback_payload.get("json"):
+            return json.loads(payload.fallback_payload["json"])
+
+        # 1) seeds → hybrid meta-flatten
+        chunk = hybrid_flatten_meta(payload.generative_payload["seeds"])
+
+        op:        np.ndarray = chunk["op"]
+        meta_cls:  np.ndarray = chunk["meta_cls"]
+        meta_key:  np.ndarray = chunk["meta_key"]
+        lut_cls:   list[str]  = chunk["lut_cls"]
+        lut_key:   list[str]  = chunk["lut_key"]
+
+        n_rows = op.size
+
+        # 2) chunk 사이즈 계산
+        free, _ = cp.cuda.runtime.memGetInfo()
+        rows_per = max(int((free * self.vram_frac) // (op.itemsize * 4)), 256_000)
+
+        ids_a = np.empty(n_rows, np.uint32)
+        ids_b = np.empty(n_rows, np.uint32)
+
+        def ranges(total: int, step: int) -> Iterable[range]:
+            s = 0
+            while s < total:
+                e = min(s + step, total)
+                yield range(s, e)
+                s = e
+
+        # 3) GPU remap (chunked)
+        for r in ranges(n_rows, rows_per):
+            sub = {k: (v[r] if k.startswith(("op", "mask", "meta")) else v)
+                   for k, v in chunk.items()}
+            a, b = run_remap(sub)
+            ids_a[r], ids_b[r] = a, b
+
+        # 4) GPU 결과 → 객체 그래프 복원
+        objs: Dict[int, Any] = {}
+
+        for i in range(n_rows):
             code = int(op[i])
-            if code == 0:            # NEW
-                vid = ids_a[i]
-                objs[vid] = {}       # 임시, 타입 정보 생략(필요시 class_name 처리)
-            elif code == 1:          # APPEND
-                p = ids_a[i]; c = ids_b[i]
+
+            if code == OP_NEW:
+                vid      = ids_a[i]
+                cls_idx  = int(meta_cls[i])
+                cls_name = lut_cls[cls_idx] if cls_idx != 0xFFFF else "dict"
+
+                match cls_name:
+                    case "dict": objs[vid] = {}
+                    case "list": objs[vid] = []
+                    case _:      objs[vid] = {"__class__": cls_name}
+
+            elif code == OP_APPEND:
+                p, c = ids_a[i], ids_b[i]
                 parent, child = objs[p], objs[c]
+
                 if isinstance(parent, list):
                     parent.append(child)
                 else:
-                    # dict 부모라 가정 → 키 이름은 없으므로 인덱스로 보관
-                    parent[str(len(parent))] = child
-            # REPEAT_BEG / END 는 flatten 토큰이므로 스킵
+                    k_idx = int(meta_key[i])
+                    key   = lut_key[k_idx] if k_idx != 0xFFFFFFFF else str(len(parent))
+                    parent[key] = child
+            # OP_REPEAT_BEG / END 토큰은 실질 데이터 아님 → skip
 
-        root = payload.generative_payload["root_id"]
-        root_idx = int(root.replace("n", ""), 10)  # n00000001 → 1
+        # 5) 루트 객체 반환
+        root_text = payload.generative_payload["root_id"]  # e.g. "n00000123"
+        root_idx  = int(root_text[1:])                     # strip leading "n"
+        if root_idx not in objs:
+            raise ValueError(f"Root id {root_text} not present after decode")
         return objs[root_idx]
-
-
-
 
 
