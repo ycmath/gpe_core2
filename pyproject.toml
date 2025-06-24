@@ -1,35 +1,66 @@
 # pyproject.toml
 
 [tool.poetry]
-name = "gpe-core"
-version = "0.1.0"
+name        = "gpe-core"
+version     = "0.2.0"
 description = "Core library for Generative Payload Encapsulation (GPE) protocol"
-authors = ["Your Name <you@example.com>"] # 이 부분은 나중에 개발자가 수정할 것입니다.
-readme = "README.md"
-packages = [{include = "gpe_core"}]
+authors     = ["Your Name <you@example.com>"]  # TODO: update
+readme      = "README.md"
+license     = "MIT"
+packages    = [{include = "gpe_core"}]
 
+# ────────────────────────────────────────────────────────────────────
+# 기본 런타임 의존성
+# ────────────────────────────────────────────────────────────────────
 [tool.poetry.dependencies]
-python = "^3.10"
-pydantic = "^2.7.0"
+python   = "^3.10"
+numpy    = "^1.26"
+pydantic = "^2.7"
 
+# 최적화 / 가속 (자동 감지용)
+xxhash   = {version = "^3.4", optional = true}
+mmh3     = {version = "^4.0", optional = true}
+orjson   = {version = "^3.10", optional = true}
+
+# GPU (optional) — CUDA 11+ 환경에서만 설치 가능
+cupy     = {version = "^13.0", markers = "sys_platform == 'linux'", optional = true}
+
+# Numba JIT (optional)
+numba    = {version = "^0.59", optional = true}
+
+# ────────────────────────────────────────────────────────────────────
+# 선택적 extras
+#   pip install gpe-core[accel]        → numba + xxhash + orjson
+#   pip install gpe-core[gpu]          → cupy + numba + xxhash + orjson
+# ────────────────────────────────────────────────────────────────────
+[tool.poetry.extras]
+accel = ["numba", "xxhash", "orjson"]
+gpu   = ["cupy", "numba", "xxhash", "orjson"]
+
+# ────────────────────────────────────────────────────────────────────
+# 개발(development) 의존성
+# ────────────────────────────────────────────────────────────────────
 [tool.poetry.group.dev.dependencies]
-pytest = "^8.0.0"
-black = "^24.4.0"
-isort = "^5.13.2"
-flake8 = "^7.0.0"
-mypy = "^1.9.0"
-locust = "^2.26.0"      # Phase 3 부하 테스트를 위한 도구
-Sphinx = "^7.3.7"       # Phase 4 문서화를 위한 도구
+pytest  = "^8.0"
+black   = "^24.4"
+isort   = "^5.13"
+flake8  = "^7.0"
+mypy    = "^1.9"
+locust  = "^2.26"   # Phase-3 load testing
+Sphinx  = "^7.3"    # Phase-4 documentation
+pytest-benchmark = "^4.0"  # 성능 측정
 
+# ────────────────────────────────────────────────────────────────────
 [build-system]
 requires = ["poetry-core"]
-build-backend = "poetry.core.main.api"
+build-backend = "poetry.core.main"
 
-# 코드 포맷터 (Black) 설정
+# ────────────────────────────────────────────────────────────────────
+# Formatting & linting 설정
+# ────────────────────────────────────────────────────────────────────
 [tool.black]
-line-length = 88
-target-version = ['py310']
+line-length    = 88
+target-version = ["py310"]
 
-# 임포트 정렬 (isort) 설정
 [tool.isort]
 profile = "black"
