@@ -899,9 +899,17 @@ from ..decoder import GPEDecoder
 
 class GPEDecoderGPUStream:
     """GPU remap + CPU 객체 재구성 (단순 스트리밍)."""
-
     def __init__(self, vram_frac: float = 0.7):
         self.vram_frac = vram_frac
+        
+    def _auto_rows(self, n_rows: int, itemsize: int) -> int:
+        """GPU free-mem 기준 rows_per 자동 조정."""
+        free, _ = cp.cuda.runtime.memGetInfo()
+        budget  = int(free * self.vram_frac)
+        rows    = max(int(budget // (itemsize * 4)), 128_000)
+        while rows > 128_000 and rows * itemsize * 4 > budget:
+            rows //= 2
+        return rows
 
     # ------------------------------------------------------------------
     def decode(self, payload: GpePayload) -> Any:
@@ -919,7 +927,7 @@ class GPEDecoderGPUStream:
 
         # 2) chunk 크기 계산 (GPU VRAM 70 % 정도 사용)
         free, _ = cp.cuda.runtime.memGetInfo()
-        rows_per = max(int((free * self.vram_frac) // (op.itemsize * 4)), 256_000)
+        rows_per = self._auto_rows(total, op.itemsize)
 
         def ranges(n: int, step: int) -> Iterable[range]:
             s = 0
@@ -1041,7 +1049,7 @@ class GPEDecoderGPUStreamFull:
         op = chunk["op"]
         n_rows = op.size
         free, _ = cp.cuda.runtime.memGetInfo()
-        rows_per = max(int((free * self.vram_frac) // (op.itemsize * 4)), 256_000)
+        rows_per = self._auto_rows(n_rows, op.itemsize)
 
         ids_a = np.empty(n_rows, np.uint32)
         ids_b = np.empty(n_rows, np.uint32)
