@@ -36,12 +36,6 @@ class GPEDecoder:
                 raise GPEDecodeError(f"Fallback JSON 파싱 실패: {e}") from e
 
         # 1) prepare containers
-        # 0) fallback JSON
-        fb = payload.fallback_payload
-        if fb and fb.get("json"):
-            return json.loads(fb["json"])
-
-        # 1) prepare containers
         objs: Dict[str, Any] = {}
         meta: Dict[str, Dict[str, Any]] = {}
 
@@ -84,8 +78,11 @@ class GPEDecoder:
         elif op == "REPEAT":
             for _ in range(r["count"]):
                 tmpl = copy.deepcopy(r["instruction"])
-                for rule in tmpl:
-                    self._apply_py(rule, o, m)
+                if isinstance(tmpl, list):
+                    for rule in tmpl:
+                        self._apply_py(rule, o, m)
+                else:
+                    self._apply_py(tmpl, o, m)
         else:
             raise ValueError(op)
 
@@ -98,7 +95,7 @@ class GPEDecoder:
             t_objs = typed.Dict.empty(key_type=njit.str_, value_type=njit.types.pyobject)
             t_meta = typed.Dict.empty(key_type=njit.str_, value_type=njit.types.pyobject)
 
-            @njit(cache=True)
+            @njit(cache=False)  # cache=False로 변경
             def run(seeds_list, objs, meta):
                 for seed in seeds_list:
                     for rule in seed["rules"]:
