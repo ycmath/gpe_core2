@@ -1,9 +1,14 @@
 from dataclasses import asdict
+from .models import GpePayload
+from .ast_builder import ASTBuilder
+from .repetition_detector import RepetitionDetector
+from .seed_generator import SeedGenerator
+from .json_util import dumps
 
 class GPEEncoder:
     def __init__(self, include_fallback: bool = True):
         self.include_fallback = include_fallback
-
+    
     def encode(self, data):
         builder = ASTBuilder()
         root_id = builder.build(data)
