@@ -1,0 +1,35 @@
+# pyproject.toml
+
+[tool.poetry]
+name = "gpe-core"
+version = "0.1.0"
+description = "Core library for Generative Payload Encapsulation (GPE) protocol"
+authors = ["Your Name <you@example.com>"] # 이 부분은 나중에 개발자가 수정할 것입니다.
+readme = "README.md"
+packages = [{include = "gpe_core"}]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+pydantic = "^2.7.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0.0"
+black = "^24.4.0"
+isort = "^5.13.2"
+flake8 = "^7.0.0"
+mypy = "^1.9.0"
+locust = "^2.26.0"      # Phase 3 부하 테스트를 위한 도구
+Sphinx = "^7.3.7"       # Phase 4 문서화를 위한 도구
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.main.api"
+
+# 코드 포맷터 (Black) 설정
+[tool.black]
+line-length = 88
+target-version = ['py310']
+
+# 임포트 정렬 (isort) 설정
+[tool.isort]
+profile = "black"
