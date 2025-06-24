@@ -1,6 +1,7 @@
 from itertools import count
 import json, hashlib
 from typing import Any, Dict
+from .models import ASTNode  # 추가 필요!
 
 try:
     import xxhash  # type: ignore
@@ -14,13 +15,13 @@ except ModuleNotFoundError:
 
 class ASTBuilder:
     _ctr = count()
-
+    
     def __init__(self):
         self.nodes: Dict[str, ASTNode] = {}
-
+    
     def build(self, obj: Any) -> str:
         return self._visit(obj, None)
-
+    
     # ------------------------------------------------------------------
     def _visit(self, obj: Any, parent: str | None) -> str:
         nid = f"n{next(self._ctr):08d}"
