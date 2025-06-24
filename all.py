@@ -375,9 +375,10 @@ class GPEDecodeError(RuntimeError):
     """Raised when a GPE payload cannot be decoded (e.g., fallback JSON corrupt)."""
 
 # ---------------------------------------------------------------------------
+# 라인 20-25를 다음과 같이 수정:
 try:
-    from numba import njit, typed  # type: ignore
-    _NUMBA_AVAIL = True
+    from numba import njit, typed, types  # type: ignore
+    _NUMBA_AVAIL = False  # 일단 비활성화
 except ModuleNotFoundError:  # pragma: no cover
     _NUMBA_AVAIL = False
 
@@ -451,8 +452,9 @@ class GPEDecoder:
     if _NUMBA_AVAIL:
         def _apply_numba(self, seeds: List[Dict[str, Any]], objs_py: Dict[str, Any], meta_py: Dict[str, Dict[str, Any]]):
             """Convert py‑dicts to numba typed.Dict & run JIT kernel."""
-            t_objs = typed.Dict.empty(key_type=njit.str_, value_type=njit.types.pyobject)
-            t_meta = typed.Dict.empty(key_type=njit.str_, value_type=njit.types.pyobject)
+            from numba import types
+            t_objs = typed.Dict.empty(key_type=types.unicode_type, value_type=types.pyobject)
+            t_meta = typed.Dict.empty(key_type=types.unicode_type, value_type=types.pyobject)
 
             @njit(cache=False)  # cache=False로 변경
             def run(seeds_list, objs, meta):
@@ -507,6 +509,7 @@ class GPEDecoder:
     else:
         def _apply_numba(self, *a, **kw):  # type: ignore[no-self-use]
             raise RuntimeError("Numba not installed")
+
 
 ################################################################################
 # gpe_core/decoder_mp.py (multiprocessing)
