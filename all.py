@@ -1103,38 +1103,39 @@ class GPEDecoderGPUStreamFull:
         root_idx = int(root_text[1:], 10)
         return objs[root_idx]
 
+
 ## lut_key_blob 간단화: 키를 | 구분자로 이어붙여 offset 계산 → 필요 시 UTF-8 safe concat으로 개선 가능.
 ## 이제 gpu-full 백엔드는 Host Python 루프 없이 GPU → Host 단일 전송만으로 완전 복원이 이루어집니다.
 
 
+"""
+아래 설계안은 **“GPU 단일 커널에서 객체 그래프까지 완-조립”** 을 목표로 한 v2.5 플랜입니다. 
+현재 파이프라인과 100 % 호환되도록 **새 커널과 래퍼만 추가**하고, 기존 `stream_decoder_meta.py` 를 “GPU-Full” 백엔드에서 호출하도록 교체하면 됩니다.
 
+1. 데이터 레이아웃
 
-## 아래 설계안은 **“GPU 단일 커널에서 객체 그래프까지 완-조립”** 을 목표로 한 v2.5 플랜입니다. 
-## 현재 파이프라인과 100 % 호환되도록 **새 커널과 래퍼만 추가**하고, 기존 `stream_decoder_meta.py` 를 “GPU-Full” 백엔드에서 호출하도록 교체하면 됩니다.
+| 배열             | dtype         | 의미                                       |
+| -------------- | ------------- | ---------------------------------------- |
+| `op`           | `uint8`       | 0 NEW · 1 APPEND · 2 REP-BEG · 3 REP-END |
+| `ids_a`        | `uint32`      | NEW/APPEND 첫 번째 인자                       |
+| `ids_b`        | `uint32`      | APPEND 두 번째 인자 (child)                   |
+| `meta_cls`     | `uint16`      | NEW 행의 class-id (`lut_cls`)              |
+| `meta_key`     | `uint32`      | APPEND 행의 key-id (`lut_key`)             |
+| `lut_cls`      | `char[ ]` *N* | N×null-terminated 클래스 문자열 풀              |
+| `lut_key_off`  | `uint32`      | 키 풀 오프셋 테이블 (dict-key)                   |
+#| `lut_key_blob` | `char[ ]`     | key 문자열 concat blob                      |
 
-## 1. 데이터 레이아웃
+device-side 출력 버퍼
 
-## | 배열             | dtype         | 의미                                       |
-## | -------------- | ------------- | ---------------------------------------- |
-## | `op`           | `uint8`       | 0 NEW · 1 APPEND · 2 REP-BEG · 3 REP-END |
-## | `ids_a`        | `uint32`      | NEW/APPEND 첫 번째 인자                       |
-## | `ids_b`        | `uint32`      | APPEND 두 번째 인자 (child)                   |
-## | `meta_cls`     | `uint16`      | NEW 행의 class-id (`lut_cls`)              |
-## | `meta_key`     | `uint32`      | APPEND 행의 key-id (`lut_key`)             |
-## | `lut_cls`      | `char[ ]` *N* | N×null-terminated 클래스 문자열 풀              |
-## | `lut_key_off`  | `uint32`      | 키 풀 오프셋 테이블 (dict-key)                   |
-## | `lut_key_blob` | `char[ ]`     | key 문자열 concat blob                      |
+| 이름        | dtype    | 설명                                        |
+| --------- | -------- | ----------------------------------------- |
+| `d_types` | `uint8`  | 0 dict · 1 list · 2 custom                |
+| `d_heads` | `uint32` | dict ➔ 첫 엔트리 index / list ➔ 첫 child index |
+| `d_next`  | `uint32` | sibling / hash-chain (single-linked)      |
+| `d_keys`  | `uint32` | dict 전용: key-id                           |
 
-## device-side 출력 버퍼
-
-## | 이름        | dtype    | 설명                                        |
-## | --------- | -------- | ----------------------------------------- |
-## | `d_types` | `uint8`  | 0 dict · 1 list · 2 custom                |
-## | `d_heads` | `uint32` | dict ➔ 첫 엔트리 index / list ➔ 첫 child index |
-## | `d_next`  | `uint32` | sibling / hash-chain (single-linked)      |
-## | `d_keys`  | `uint32` | dict 전용: key-id                           |
-
-## *인덱스* = node-id(`ids_a/ids_b`) 그대로 사용 → 호스트 복사-백 필요 없음.
+*인덱스* = node-id(`ids_a/ids_b`) 그대로 사용 → 호스트 복사-백 필요 없음.
+"""
 
 ## 2. CUDA 커널 `assemble_graph.cu` (요약)
 
@@ -1313,30 +1314,31 @@ def cupy_graph_to_py(d_type, d_head, d_next, d_key, lut_cls, lut_key_blob, lut_k
 
 ## `lut_key_off` 는 key 문자열 시작-offset 배열 (+ 마지막에 blob.length 추가).
 
-## 5. 통합 (flow)
+"""
+5. 통합 (flow)
 
-## 1. **run\_remap** → `ids_a/ids_b` GPU 배열 반환
-## 2. **assemble\_graph** 커널 호출 → 4 출력 버퍼
-## 3. Host `cupy_graph_to_py()` 로 단일 pass 변환 → 파이썬 객체 완성
-## 4. 루트 ID 찾아 반환
+1. **run\_remap** → `ids_a/ids_b` GPU 배열 반환
+2. **assemble\_graph** 커널 호출 → 4 출력 버퍼
+3. Host `cupy_graph_to_py()` 로 단일 pass 변환 → 파이썬 객체 완성
+4. 루트 ID 찾아 반환
 
-## > **이후**: `cupy_graph_to_py` 를 Numba JIT 로 바꾸면 Host 변환도 5× 가속.
+> **이후**: `cupy_graph_to_py` 를 Numba JIT 로 바꾸면 Host 변환도 5× 가속.
 
-## 6. 성능 예측
+6. 성능 예측
 
-## | 단계             | 50 만 rule 기준 | v1 (복합)              | v2.5 커널 |
-## | -------------- | ------------ | -------------------- | ------- |
-## | ID remap (GPU) | 12 ms        | **동일**               |         |
-## | Assemble GPU   | –            | **6 ms**             |         |
-## | Host Python 조립 | 90 ms        | **18 ms**            |         |
-## | **합계**         | **\~102 ms** | **\~36 ms (\~2.8×)** |         |
+| 단계             | 50 만 rule 기준 | v1 (복합)              | v2.5 커널 |
+| -------------- | ------------ | -------------------- | ------- |
+| ID remap (GPU) | 12 ms        | **동일**               |         |
+| Assemble GPU   | –            | **6 ms**             |         |
+| Host Python 조립 | 90 ms        | **18 ms**            |         |
+| **합계**         | **\~102 ms** | **\~36 ms (\~2.8×)** |         |
 
 
-## 7. To-do
+7. To-do
 
-## 1. **key lookup** 최적화를 위해 `lut_key_blob` 를 GPU로 복사해 커널-내 UTF-8 copy-out까지 수행 가능.
-## 2. 멀티-GPU: op 범위를 device마다 분할 → AllReduce 불필요(리니어).
-
+1. **key lookup** 최적화를 위해 `lut_key_blob` 를 GPU로 복사해 커널-내 UTF-8 copy-out까지 수행 가능.
+2. 멀티-GPU: op 범위를 device마다 분할 → AllReduce 불필요(리니어).
+"""
 ################################################################################
 # gpe_core/gpu/graph_to_py.py
 ################################################################################
@@ -1392,85 +1394,6 @@ def cupy_graph_to_py(
             child = int(d_next[child])
 
     return objs
-
-
-################################################################################
-# gpe_core/gpu/stream_decoder_meta.py
-################################################################################
-
-from __future__ import annotations
-import json
-import numpy as np
-import cupy as cp
-from typing import Any
-
-from ..models import GpePayload
-from ..vectorizer_hybrid_meta import hybrid_flatten_meta, OP_NEW, OP_APPEND
-from .id_remap_opt import run_remap
-from .assemble_graph import gpu_assemble
-from .graph_to_py import cupy_graph_to_py
-
-
-class GPEDecoderGPUStreamFull:
-    """Full GPU decode: ID remap + CUDA graph assemble + Host copy-back."""
-
-    def __init__(self, vram_frac: float = 0.7):
-        self.vram_frac = vram_frac
-
-    # ------------------------------------------------------------------
-    def decode(self, payload: GpePayload) -> Any:
-        # fallback 우선
-        fb = payload.fallback_payload
-        if fb and fb.get("json"):
-            return json.loads(fb["json"])
-
-        # flatten to arrays incl. meta
-        chunk = hybrid_flatten_meta(payload.generative_payload["seeds"])
-
-        # 1) GPU ID remap
-        op = chunk["op"]
-        n_rows = op.size
-        free, _ = cp.cuda.runtime.memGetInfo()
-        rows_per = max(int((free * self.vram_frac) // (op.itemsize * 4)), 256_000)
-
-        ids_a = np.empty(n_rows, np.uint32)
-        ids_b = np.empty(n_rows, np.uint32)
-
-        def ranges(total, step):
-            s = 0
-            while s < total:
-                e = min(s + step, total)
-                yield range(s, e)
-                s = e
-
-        for r in ranges(n_rows, rows_per):
-            sub = {k: (v[r] if k.startswith(("op", "mask", "meta")) else v)
-                   for k, v in chunk.items()}
-            a, b = run_remap(sub)
-            ids_a[r], ids_b[r] = a, b
-
-        # 2) GPU graph assembly
-        d_type, d_head, d_next, d_key = gpu_assemble(chunk, ids_a, ids_b)
-
-        # 3) Host-side final Python objects
-        lut_key_blob = "|".join(chunk["lut_key"]).encode() + b"|"  # simple concat
-        lut_key_off = np.fromiter(
-            (0, *np.cumsum([len(k) + 1 for k in chunk["lut_key"]])),
-            dtype=np.uint32,
-        )
-        objs = cupy_graph_to_py(
-            d_type, d_head, d_next, d_key,
-            chunk["lut_cls"],
-            lut_key_blob,
-            lut_key_off,
-        )
-
-        root_text = payload.generative_payload["root_id"]   # "n00000xxx"
-        root_idx = int(root_text[1:], 10)
-        return objs[root_idx]
-
-## lut_key_blob 간단화: 키를 | 구분자로 이어붙여 offset 계산 → 필요 시 UTF-8 safe concat으로 개선 가능.
-## 이제 gpu-full 백엔드는 Host Python 루프 없이 GPU → Host 단일 전송만으로 완전 복원이 이루어집니다.
 
 
 ## 멀티-GPU 분산 디코딩을 위해 Ray actor-풀 오케스트레이터를 단계별로 나눠 드리겠습니다.
@@ -1670,7 +1593,8 @@ def profile_section(name: str):
         print(s.getvalue())
         
 ################################################################################
-## 간단 통합 예시
+"""
+간단 통합 예시
 
 from gpe_core.utils_profile import profile_section
 
@@ -1681,25 +1605,9 @@ def cmd_bench(ns):
     with profile_section("decode"):
         dec.decode(payload)
         
-## GPE_PROFILE=1 gpe bench ... 처럼 실행하면 섹션별 누적 함수 시간이 콘솔에 출력됩니다.
-## 기본(환경변수 없을 때)은 오버헤드 없이 작동합니다.
-
-################################################################################
-# 
-################################################################################
-
-
-
-################################################################################
-# 
-################################################################################
-
-
-
-################################################################################
-# 
-################################################################################
-
+GPE_PROFILE=1 gpe bench ... 처럼 실행하면 섹션별 누적 함수 시간이 콘솔에 출력됩니다.
+기본(환경변수 없을 때)은 오버헤드 없이 작동합니다.
+"""
 
 
 
