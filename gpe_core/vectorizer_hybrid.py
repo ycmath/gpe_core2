@@ -3,7 +3,11 @@ from __future__ import annotations
 import numpy as np
 from typing import Dict, List, Tuple, Any
 
-from .vectorizer import vectorize_seeds, OP_NEW, OP_APPEND, OP_REPEAT_BEG, OP_REPEAT_END
+from .vectorizer import (
+    vectorize_seeds,
+    OP_NEW, OP_APPEND, OP_REPEAT_BEG, OP_REPEAT_END,
+    OP_CONSTANT, OP_RANGE, OP_COMPACT,
+)
 
 def build_pools(ids: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     mask = (ids < 65_536).astype(np.uint8)
