@@ -8,8 +8,8 @@ import numpy as np
 def _compile(src_path: str, func: str):
     src = (Path(__file__).with_name(src_path)).read_text()
     try:
-        # 가장 보수적으로 옵션을 아예 주지 않는다
-        return cp.RawKernel(src, func)          # options=() ← 기본
+        # CuPy 12 : --std=c++11 옵션이 없으면 <stdint.h> 포함 시 에러
+        return cp.RawKernel(src, func, options=("--std=c++11",))
     except cp.cuda.compiler.CompileException as e:
         raise RuntimeError(f"CUDA compile failed for {src_path}") from e
 
