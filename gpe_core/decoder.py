@@ -189,9 +189,27 @@ class GPEDecoder:
                             if isinstance(parent, list):
                                 parent.append(child)
                             else:
-                                key = meta[c].get("key")
-                                if key is not None:  # key 체크 추가
-                                    parent[key] = child
+                                if c in meta:
+                                    key = meta[c]["key"] if "key" in meta[c] else None
+                                    if key is not None:
+                                        parent[key] = child
+                        elif op == OP_CONSTANT:
+                            for ref in rule["references"]:
+                                objs[ref] = rule["value"]         # ← deepcopy 제거
+                                meta[ref] = {"__origin__": "CONST"}
+                        elif op == OP_RANGE:
+                            start = rule["start"]; step = rule.get("step", 1)
+                            for i, inst in enumerate(rule["instance_ids"]):
+                                objs[inst] = start + i * step
+                                meta[inst] = {"__origin__": "RANGE"}
+                        elif op == OP_COMPACT_LIST:
+                            ln  = rule["length"]
+                            arr = [rule["default_value"]] * ln
+                            for idx, val in rule["exceptions"]:
+                                arr[idx] = val
+                            pid = rule["parent_id"]
+                            objs[pid] = arr
+                            meta[pid] = {"__origin__": "COMPACT"}
                         elif op == "REPEAT":
                             for _ in range(rule["count"]):
                                 instruction = rule["instruction"]
