@@ -1,7 +1,7 @@
 from dataclasses import asdict
 from typing import Any, Dict, Optional
 
-from .models import GpePayload, BaseRule
+from .models import GpePayload, BaseRule, AttentionSeed
 from .ast_builder import ASTBuilder
 from .repetition_detector import RepetitionDetector
 from .seed_generator import SeedGenerator
@@ -30,29 +30,33 @@ class GPEEncoder:
         builder = ASTBuilder()
         root_id = builder.build(data)
         rep = RepetitionDetector(builder.nodes).detect()
-        rules: list[BaseRule] = SeedGenerator(builder.nodes, rep).generate()
+        seeds: list[AttentionSeed] = SeedGenerator(builder.nodes, rep).generate()
 
         # ── (1) 규칙 최적화 단계 ──────────────────────────
         if self.enable_optimization:
+            # 1) AttentionSeed → flat rule 리스트
+            flat_rules: list[BaseRule] = [r for s in seeds for r in s.rules]
+
+            # 2) 최적화
             opt = RuleOptimizer(
                 constant_threshold=self.opt_config["constant_threshold"],
                 template_threshold=self.opt_config["template_threshold"],
                 range_min_length=self.opt_config["range_min_length"],
             )
-            rules = opt.optimize_rules(rules)
-            gen = {
-                "version": GPE_V1_1,
-                "root_id": root_id,
-                "seeds": [asdict(r) for r in rules],
-                "optimization": opt.get_stats(),
-            }
+            flat_rules = opt.optimize_rules(flat_rules)
+            gen = dict(
+                version=GPE_V1_1,
+                root_id=root_id,
+                seeds=[asdict(r) for r in flat_rules],   # v1.1 = flat
+                optimization=opt.get_stats(),
+            )
             payload_version = GPE_V1_1
         else:
-            gen = {
-                "version": GPE_V1_0,
-                "root_id": root_id,
-                "seeds": [asdict(s) for s in rules],
-            }
+            gen = dict(
+                version=GPE_V1_0,
+                root_id=root_id,
+                seeds=[asdict(s) for s in seeds],        # v1.0 = [{rules:[…]}]
+            )
             payload_version = GPE_V1_0
         fb = dumps(data) if self.include_fallback else None
         return GpePayload(
