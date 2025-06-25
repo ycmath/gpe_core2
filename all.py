@@ -2463,3 +2463,70 @@ def test_perf(backend):
         nojit_ms = (time.perf_counter() - t0) * 1000
         assert dec_ms <= nojit_ms / 1.5, f"Numba path too slow: {dec_ms:.1f} vs {nojit_ms:.1f}"
 
+
+################################################################################
+# gpe_core/__init__.py
+################################################################################
+
+"""GPE Core - Generative Payload Encapsulation protocol implementation."""
+
+__version__ = "0.1.0"
+__author__ = "YC Math"
+
+# 주요 클래스들 export
+from .models import (
+    ASTNode,
+    BaseRule,
+    InstantiateRule,
+    AppendChildRule,
+    RepeatRule,
+    AttentionSeed,
+    GpePayload,
+)
+from .rule_optimizer import RuleOptimizer
+from .encoder import GPEEncoder
+from .decoder import GPEDecoder, GPEDecodeError
+from .decoder_mp import GPEDecoderMP
+from .decoder_mp_shm import GPEDecoderMP_ShMem
+
+# 선택적 imports (의존성이 설치된 경우만)
+try:
+    from .gpu.stream_decoder import GPEDecoderGPUStream
+    from .gpu.stream_decoder_meta import GPEDecoderGPUStreamFull
+except ImportError:
+    pass
+
+try:
+    from .gpu_multi.multi_decoder import GPEDecoderGPU_Ray
+except ImportError:
+    pass
+
+__all__ = [
+    "ASTNode",
+    "BaseRule",
+    "InstantiateRule",
+    "AppendChildRule",
+    "RepeatRule",
+    "AttentionSeed",
+    "GpePayload",
+    "ConstantRule", "TemplateRule", "RangeRule", "CompactListRule",
+    "RuleOptimizer",
+    "GPEEncoder",
+    "GPEDecoder",
+    "GPEDecodeError",
+    "GPEDecoderMP",
+    "GPEDecoderMP_ShMem",
+]
+
+################################################################################
+# gpe_core/gpu/__init__.py
+################################################################################
+
+
+
+
+################################################################################
+# gpe_core/gpu_multi/__init__.py
+################################################################################
+
+
