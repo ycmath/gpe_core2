@@ -1,29 +1,23 @@
 from __future__ import annotations
-
 from pathlib import Path
 from typing import Dict, Any, Tuple
-
 import cupy as cp
 import numpy as np
 
-# ── 커널 선택 ────────────────────────────────────────────────────────────
-def _load_kernel():
-    # v2 (warp-optimized) 우선
+# ── CUDA 커널 로더 ───────────────────────────────────────────
+def _compile(src_path: str, func: str):
+    src = (Path(__file__).with_name(src_path)).read_text()
     try:
-        src_v2 = (Path(__file__).with_name("assemble_graph_v2.cu")).read_text()
-        try:
-            return cp.RawKernel(src_v2, "assemble_graph_v2",
-                                options=("-arch=sm_70",))   # -O3 제거
-        except cp.cuda.compiler.CompileException:
-            # 최적화 플래그 없는 폴백
-            return cp.RawKernel(src_v2, "assemble_graph_v2")
+        # 가장 보수적으로 옵션을 아예 주지 않는다
+        return cp.RawKernel(src, func)          # options=() ← 기본
+    except cp.cuda.compiler.CompileException as e:
+        raise RuntimeError(f"CUDA compile failed for {src_path}") from e
+
+def _load_kernel():
+    try:
+        return _compile("assemble_graph_v2.cu", "assemble_graph_v2")
     except Exception:
-        # fallback v1
-        src_v1 = (Path(__file__).with_name("assemble_graph.cu")).read_text()
-        try:
-            return cp.RawKernel(src_v1, "assemble_graph")
-        except cp.cuda.compiler.CompileException as e:
-            raise RuntimeError("CUDA kernel compile failed") from e
+        return _compile("assemble_graph.cu",    "assemble_graph")
 
 _KERNEL = _load_kernel()
 
@@ -70,11 +64,6 @@ def gpu_assemble(
         ),
     )
     return d_type, d_head, d_next, d_key
-
-
-## > *`ida/idb` 는 기존 `run_remap()` 반환값을 바로 `cp.asarray()` 로 전달.*
-## sm_70 (Volta+) 이상 GPU가 있으면 v2 커널 자동 사용 → 약 15-20 % 속도 향상
-## 낮은 GPU·컴파일 오류 환경에선 기존 v1 커널로 안전하게 폴백됩니다.
 
 
 
