@@ -1,7 +1,7 @@
 import numpy as np
 from typing import List, Tuple, Dict, Any
 
-OP_NEW, OP_APPEND, OP_REPEAT_BEG, OP_REPEAT_END = range(4)
+OP_NEW, OP_APPEND, OP_REPEAT_BEG, OP_REPEAT_END, OP_CONSTANT, OP_RANGE, OP_COMPACT = range(7)
 
 def vectorize_seeds(seeds: List[Dict[str, Any]]) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     idmap: Dict[str, int] = {}
@@ -26,7 +26,15 @@ def vectorize_seeds(seeds: List[Dict[str, Any]]) -> Tuple[np.ndarray, np.ndarray
             for sub in r["instruction"]:
                 emit(sub)
             rows.append((OP_REPEAT_END, 0, 0, 0))
-
+        elif oc == "CONSTANT":
+            for ref in r.get("references", []):
+                rows.append((OP_CONSTANT, idx(ref), 0, 0))
+        elif oc == "RANGE":
+            for ref in r["instance_ids"]:
+                rows.append((OP_RANGE, idx(ref), 0, 0))
+        elif oc == "COMPACT_LIST":
+            rows.append((OP_COMPACT, idx(r["parent_id"]), 0, 0))
+    
     for seed in seeds:
         for rule in seed["rules"]:
             emit(rule)
