@@ -17,7 +17,15 @@ class GPEDecoderGPUStreamFull:
 
     def __init__(self, vram_frac: float = 0.7):
         self.vram_frac = vram_frac
-
+    # ------------------------------------------------------------------
+    def _auto_rows(self, n_rows: int, itemsize: int) -> int:
+        """Return rows_per chunk size based on free VRAM."""
+        free, _ = cp.cuda.runtime.memGetInfo()
+        budget  = int(free * self.vram_frac)
+        rows    = max(int(budget // (itemsize * 4)), 128_000)
+        while rows > 128_000 and rows * itemsize * 4 > budget:
+            rows //= 2
+        return rows
     # ------------------------------------------------------------------
     def decode(self, payload: GpePayload) -> Any:
         # fallback 우선
