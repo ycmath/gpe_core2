@@ -1,18 +1,3 @@
-## gpe_core/gpu/assemble_graph.cu
-## -----------------------------------------------------------
-## GPU-side 객체 그래프 조립 커널
-##
-## * op[]      : 0=NEW, 1=APPEND, 2=REPEAT_BEG, 3=REPEAT_END
-## * ida[],idb : 1st / 2nd ID operand (remap 결과)
-## * meta_cls  : NEW 행의 class-id (0 dict, 1 list, >=2 custom LUT)
-## * meta_key  : APPEND 행의 key-id (lut_key), 0xFFFFFFFF = none
-##
-## 출력
-## * d_type : 0 dict · 1 list · 2 custom
-## * d_head : head pointer to first child (single-linked list)
-## * d_next : sibling pointer (next child)
-## * d_key  : dict 전용 key-id
-##/ -----------------------------------------------------------
 
 #include <cuda_runtime.h>
 
