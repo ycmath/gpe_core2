@@ -225,7 +225,7 @@ class GPEDecoder:
                                             key = meta[cc].get("key")
                                             if key is not None:
                                                 pobj[key] = objs[cc]
-            run(seeds, t_objs, t_meta)
+            run(rules, t_objs, t_meta)
             # move back to python dict for downstream
             objs_py.update(t_objs)
             meta_py.update(t_meta)
