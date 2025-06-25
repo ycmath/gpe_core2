@@ -17,7 +17,6 @@ classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -31,11 +30,11 @@ dependencies = [
     "xxhash>=3.4",
 ]
 
+
 [project.optional-dependencies]
 numba = ["numba>=0.56.0"]
 gpu   = ["cupy-cuda11x"]    # CUDA 11
 gpu12 = ["cupy-cuda12x"]    # CUDA 12
-]
 gpu-multi = [
     "cupy-cuda11x>=11.0.0",
     "ray[default]>=2.0.0",
@@ -81,7 +80,7 @@ line-length = 88
 target-version = ['py38', 'py39', 'py310', 'py311']
 
 [tool.mypy]
-python_version = "3.8"
+python_version = "3.9"
 warn_return_any = true
 warn_unused_configs = true
 ignore_missing_imports = true
