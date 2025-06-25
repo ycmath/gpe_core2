@@ -9,14 +9,20 @@ import numpy as np
 # ── 커널 선택 ────────────────────────────────────────────────────────────
 def _load_kernel():
     # v2 (warp-optimized) 우선
-    try:
         src_v2 = (Path(__file__).with_name("assemble_graph_v2.cu")).read_text()
-        return cp.RawKernel(src_v2, "assemble_graph_v2",
-                            options=("-O3", "-arch=sm_70",))
+        try:
+            return cp.RawKernel(src_v2, "assemble_graph_v2",
+                                options=("-arch=sm_70",))   # -O3 제거
+        except cp.cuda.compiler.CompileException:
+            # 최적화 플래그 없는 폴백
+            return cp.RawKernel(src_v2, "assemble_graph_v2")
     except Exception:
         # fallback v1
         src_v1 = (Path(__file__).with_name("assemble_graph.cu")).read_text()
-        return cp.RawKernel(src_v1, "assemble_graph", options=("-O3",))
+        try:
+            return cp.RawKernel(src_v1, "assemble_graph")
+        except cp.cuda.compiler.CompileException as e:
+            raise RuntimeError("CUDA kernel compile failed") from e
 
 _KERNEL = _load_kernel()
 
