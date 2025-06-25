@@ -3,7 +3,9 @@ Core library for Generative Payload Encapsulation (GPE) protocol
 
 
 <-- ──────────────────────────────────────────────────────────── -->
+
 <-- ADD: v1.1-alpha QUICK START & FEATURE OVERVIEW (2025-06-25) -->
+
 <-- ──────────────────────────────────────────────────────────── -->
 
 ## ✨ What’s New in v1.1-alpha
