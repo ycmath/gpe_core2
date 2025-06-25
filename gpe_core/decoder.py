@@ -32,6 +32,10 @@ except ModuleNotFoundError:  # pragma: no cover
     _NUMBA_AVAIL = False
 
 class GPEDecoder:
+    def __init__(self, use_numba: bool | None = None):
+        # allow override; default = env / availability
+        self._use_numba = _NUMBA_AVAIL if use_numba is None else use_numba
+
     def decode(self, payload: GpePayload) -> Any:
         try:
             # fallback JSON with robust error handling
@@ -64,7 +68,7 @@ class GPEDecoder:
             else:
                 flat_rules = [r for s in rules_or_seeds for r in s.get("rules", [])]  # v1.0
 
-            if _NUMBA_AVAIL:
+            if self._use_numba:
                 self._apply_numba(flat_rules, objs, meta)
             else:
                 for rule in flat_rules:
