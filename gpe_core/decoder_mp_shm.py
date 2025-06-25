@@ -19,8 +19,8 @@ class GPEDecoderMP_ShMem(GPEDecoder):
         raw = payload.generative_payload["seeds"]
 
         if raw and "op_code" in raw[0]:
-            chunk = ceil(len(raw) / self.processes)
-            chunks = [raw[i : i + chunk] for i in range(0, len(raw), chunk)]
+            # v1.1 → 싱글-프로세스 fallback (pickle 없이 안전)
+            return GPEDecoder(use_numba=False).decode(payload)
         else:
             chunks = [s["rules"] for s in raw]   # v1.0
         ctx = get_context("spawn")
