@@ -24,8 +24,13 @@ class GPEDecoderGPUStreamFull:
         if fb and fb.get("json"):
             return json.loads(fb["json"])
 
-        # flatten to arrays incl. meta
-        chunk = hybrid_flatten_meta(payload.generative_payload["seeds"])
+        # v1.1(flat rule list) → GPU-flatten 미지원 → CPU 디코더 우회
+        seeds_field = payload.generative_payload["seeds"]
+        if seeds_field and isinstance(seeds_field, list) and "op_code" in seeds_field[0]:
+            return GPEDecoder().decode(payload)
+
+        # v1.0 : seeds = [{"rules":[…]}, …]  → hybrid flatten
+        chunk = hybrid_flatten_meta(seeds_field)
 
         # 1) GPU ID remap
         op = chunk["op"]
