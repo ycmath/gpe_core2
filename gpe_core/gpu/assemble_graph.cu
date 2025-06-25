@@ -1,5 +1,6 @@
 
 #include <cuda_runtime.h>
+#include <stdint.h>   // ← 8/16/32-bit 정수 타입 정의
 
 extern "C" __global__
 void assemble_graph(const uint8_t*  __restrict__ op,
@@ -43,6 +44,3 @@ void assemble_graph(const uint8_t*  __restrict__ op,
     // REPEAT tokens are structural only – ignored here
 }
 
-
-## * **동기화 필요 없음**: `atomicExch` 로 child 단일-링크 list 구성 → post-pass 에서 역순 iterate.
-## * **공유 메모리**: row 단위 prefix 연산이 없으므로 쓰지 않음 → Warp divergence 無.
