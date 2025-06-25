@@ -31,10 +31,15 @@ class GPEDecoderGPUStream:
         fb = payload.fallback_payload
         if fb and fb.get("json"):
             return json.loads(fb["json"])
-
+            
+        # ── v1.1 (flat rule list) 은 GPU-remap 아직 미지원 → CPU 경로 ──
+        seeds_field = payload.generative_payload["seeds"]
+        if seeds_field and isinstance(seeds_field, list) and "op_code" in seeds_field[0]:
+            # 단순 포워딩 – GPEDecoder 는 CONSTANT / RANGE / COMPACT_LIST 지원
+            return GPEDecoder().decode(payload)
+            
         # 1) seeds → hybrid 배열(flatten)
-        seeds = payload.generative_payload["seeds"]
-        chunk = hybrid_flatten(seeds)
+        chunk = hybrid_flatten(seeds_field)
 
         op   = chunk["op"]
         total = op.size
