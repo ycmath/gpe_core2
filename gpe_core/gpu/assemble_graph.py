@@ -9,6 +9,7 @@ import numpy as np
 # ── 커널 선택 ────────────────────────────────────────────────────────────
 def _load_kernel():
     # v2 (warp-optimized) 우선
+    try:
         src_v2 = (Path(__file__).with_name("assemble_graph_v2.cu")).read_text()
         try:
             return cp.RawKernel(src_v2, "assemble_graph_v2",
