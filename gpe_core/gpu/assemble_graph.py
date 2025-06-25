@@ -38,9 +38,11 @@ def gpu_assemble(
     d_meta_key = cp.asarray(chunk["meta_key"], dtype=cp.uint32)
     d_ida      = cp.asarray(ids_a,             dtype=cp.uint32)
     d_idb      = cp.asarray(ids_b,             dtype=cp.uint32)
-    # key LUT → GPU
+    # key LUT (bytes) → uint8 GPU buffer  ─ CuPy 12.x safe path
     key_blob = "|".join(chunk["lut_key"]).encode() + b"|"
-    d_blob   = cp.asarray(key_blob, dtype=cp.uint8)
+    d_blob   = cp.asarray(                 # bytes → NumPy → CuPy
+        np.frombuffer(key_blob, dtype=np.uint8)
+    )
     key_off  = np.fromiter(
         (0, *np.cumsum([len(k)+1 for k in chunk["lut_key"]])),
         dtype=np.uint32,
