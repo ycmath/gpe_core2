@@ -31,13 +31,14 @@ class GPEDecoderMP_ShMem(GPEDecoder):
 
         objs, meta = {}, {}
         for name, size in infos:
-            shm = shared_memory.SharedMemory(name=name)
-            view = memoryview(shm.buf)[:size]
-            o, m = orjson.loads(view)
-            objs.update(o)
-            meta.update(m)
-            shm.close()
-            shm.unlink()
+            shm  = shared_memory.SharedMemory(name=name)
+            try:
+                payload_bytes = bytes(shm.buf[:size])   # 빠른 복사 → 독립 메모리
+            finally:
+                shm.close(); shm.unlink()               # view 없이 안전히 닫기
+
+            o, m = orjson.loads(payload_bytes)
+            objs.update(o); meta.update(m)
         return objs[payload.generative_payload["root_id"]]
 
 
