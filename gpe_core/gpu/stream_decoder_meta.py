@@ -5,7 +5,7 @@ import cupy as cp
 from typing import Any
 
 from ..models import GpePayload
-from .vectorizer_hybrid_meta import hybrid_flatten_meta, OP_NEW, OP_APPEND
+from ..vectorizer_hybrid_meta import hybrid_flatten_meta, OP_NEW, OP_APPEND
 from .id_remap_opt import run_remap
 from .assemble_graph import gpu_assemble
 from .graph_to_py import cupy_graph_to_py
