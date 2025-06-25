@@ -2522,6 +2522,15 @@ __all__ = [
 # gpe_core/gpu/__init__.py
 ################################################################################
 
+"""GPU accelerated components for GPE."""
+
+# GPU 모듈은 cupy가 설치된 경우에만 import
+try:
+    from .stream_decoder import GPEDecoderGPUStream
+    from .stream_decoder_meta import GPEDecoderGPUStreamFull
+    __all__ = ["GPEDecoderGPUStream", "GPEDecoderGPUStreamFull"]
+except ImportError:
+    __all__ = []
 
 
 
@@ -2529,4 +2538,52 @@ __all__ = [
 # gpe_core/gpu_multi/__init__.py
 ################################################################################
 
+"""GPE Core - Generative Payload Encapsulation protocol implementation."""
 
+__version__ = "0.1.0"
+__author__ = "YC Math"
+
+# 주요 클래스들 export
+from .models import (
+    ASTNode,
+    BaseRule,
+    InstantiateRule,
+    AppendChildRule,
+    RepeatRule,
+    AttentionSeed,
+    GpePayload,
+)
+from .rule_optimizer import RuleOptimizer
+from .encoder import GPEEncoder
+from .decoder import GPEDecoder, GPEDecodeError
+from .decoder_mp import GPEDecoderMP
+from .decoder_mp_shm import GPEDecoderMP_ShMem
+
+# 선택적 imports (의존성이 설치된 경우만)
+try:
+    from .gpu.stream_decoder import GPEDecoderGPUStream
+    from .gpu.stream_decoder_meta import GPEDecoderGPUStreamFull
+except ImportError:
+    pass
+
+try:
+    from .gpu_multi.multi_decoder import GPEDecoderGPU_Ray
+except ImportError:
+    pass
+
+__all__ = [
+    "ASTNode",
+    "BaseRule",
+    "InstantiateRule",
+    "AppendChildRule",
+    "RepeatRule",
+    "AttentionSeed",
+    "GpePayload",
+    "ConstantRule", "TemplateRule", "RangeRule", "CompactListRule",
+    "RuleOptimizer",
+    "GPEEncoder",
+    "GPEDecoder",
+    "GPEDecodeError",
+    "GPEDecoderMP",
+    "GPEDecoderMP_ShMem",
+]
