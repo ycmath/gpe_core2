@@ -1,9 +1,8 @@
 """Command‑line interface: **gpe encode / decode / bench**"""
 from __future__ import annotations
 
-import argparse
-import json
-import sys
+import argparse, json, sys
+from typing import Optional
 import time
 from pathlib import Path
 from typing import Dict
@@ -74,7 +73,10 @@ def _get_decoder(name: str):
 
 def cmd_encode(ns):
     data = _load_json(ns.input)
-    enc = GPEEncoder(include_fallback=not ns.no_fallback)
+    enc = GPEEncoder(
+        include_fallback=not ns.no_fallback,
+        enable_optimization=ns.opt,          # ← NEW
+    )
 
     t0 = time.perf_counter()
     payload = enc.encode(data)
@@ -126,7 +128,10 @@ def cmd_bench(ns):
         for _ in range(ns.n)
     ]
 
-    enc = GPEEncoder(include_fallback=False)
+    enc = GPEEncoder(
+        include_fallback=False,
+        enable_optimization=ns.opt,
+    )
     dec = _get_decoder(ns.backend)
 
     steps = ["encode", "decode"]
@@ -158,6 +163,12 @@ def main():
     sp.add_argument("--input", "-i", type=Path, required=True)
     sp.add_argument("--output", "-o", type=Path, required=True)
     sp.add_argument("--no-fallback", action="store_true", help="omit raw JSON fallback")
+    g_opt = sp.add_mutually_exclusive_group()
+    g_opt.add_argument("--opt",     dest="opt", action="store_true",
+                       help="enable rule-optimizer (v1.1, default)")
+    g_opt.add_argument("--no-opt",  dest="opt", action="store_false",
+                       help="disable optimizer (v1.0 payload)")
+    sp.set_defaults(opt=True)
     sp.add_argument("--strip", action="store_true", help="save only generative_payload")
     sp.set_defaults(func=cmd_encode)
 
@@ -173,6 +184,12 @@ def main():
     sp.add_argument("--n", type=int, default=10000, help="synthetic record count")
     sp.add_argument("--backend", "-b", default="cpu", choices=list(BACKENDS))
     sp.add_argument("--progress", action="store_true", help="show progress bar with tqdm")
+    g2 = sp.add_mutually_exclusive_group()
+    g2.add_argument("--opt",    dest="opt", action="store_true",
+                    help="benchmark v1.1 encoder (default)")
+    g2.add_argument("--no-opt", dest="opt", action="store_false",
+                    help="benchmark v1.0 encoder")
+    sp.set_defaults(opt=True)
     sp.set_defaults(func=cmd_bench)
 
     ns = ap.parse_args()
