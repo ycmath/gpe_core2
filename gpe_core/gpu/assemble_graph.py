@@ -14,10 +14,12 @@ def _compile(src_path: str, func: str):
         raise RuntimeError(f"CUDA compile failed for {src_path}") from e
 
 def _load_kernel():
-    try:
-        return _compile("assemble_graph_v2.cu", "assemble_graph_v2")
-    except Exception:
-        return _compile("assemble_graph.cu",    "assemble_graph")
+    # ▶▶  임시로 v2 커널 건너뛰기  ◀◀
+    # try:
+    #     return _compile("assemble_graph_v2.cu", "assemble_graph_v2")
+    # except Exception:
+    #     pass
+    return _compile("assemble_graph.cu", "assemble_graph")   # v1 고정
 
 _KERNEL = _load_kernel()
 
