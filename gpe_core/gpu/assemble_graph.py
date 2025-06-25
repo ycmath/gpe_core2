@@ -1,18 +1,5 @@
-"""
-GPU 객체 그래프 조립 커널 래퍼
-─────────────────────────────────────────
-* run_remap() 결과(ids_a, ids_b)와 hybrid-meta chunk를 받아
-  assemble_graph.cu 커널을 호출해 GPU 메모리 내부에서
-  dict/list 트리를 단일 pass 로 구성합니다.
-"""
-"""
-GPU 객체 그래프 조립 커널 래퍼
-─────────────────────────────────────────
-v2 커널(sm_70 이상) → 실패 시 v1로 자동 폴백
-아래처럼 v2 커널( assemble_graph_v2.cu)을 우선 시도하고,
-컴파일이 실패하면 자동으로 기존 v1 커널(assemble_graph.cu)로 폴백
-"""
 from __future__ import annotations
+
 from pathlib import Path
 from typing import Dict, Any, Tuple
 
