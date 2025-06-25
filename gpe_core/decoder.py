@@ -70,18 +70,6 @@ class GPEDecoder:
                 for rule in flat_rules:
                     self._apply_py(rule, objs, meta)
 
-            # v1.0 = [{"rules":[…]}, …]  /  v1.1 = [{"op_code":…}, …]
-            if rules_or_seeds and "op_code" in rules_or_seeds[0]:
-                flat_rules = rules_or_seeds                              # v1.1
-            else:
-                flat_rules = [r for s in rules_or_seeds for r in s.get("rules", [])]  # v1.0
-
-            if _NUMBA_AVAIL:
-                self._apply_numba(flat_rules, objs, meta)
-            else:
-                for rule in flat_rules:
-                    self._apply_py(rule, objs, meta)
-
             root_id = payload.generative_payload["root_id"]
             if root_id not in objs:
                 raise GPEDecodeError(f"Root object {root_id} not found")
@@ -134,14 +122,14 @@ class GPEDecoder:
         elif op == OP_CONSTANT:
             value = r["value"]
             for ref in r.get("references", []):
-                objs[ref] = copy.deepcopy(value)
-                meta[ref] = {"__origin__": "CONST"}
+                o[ref] = copy.deepcopy(value)
+                m[ref] = {"__origin__": "CONST"}
         elif op == OP_RANGE:
             start, end, step = r["start"], r["end"], r.get("step", 1)
             ids = r["instance_ids"]
             for i, inst_id in enumerate(ids):
-                objs[inst_id] = start + i * step
-                meta[inst_id] = {"__origin__": "RANGE"}
+                o[inst_id] = start + i * step
+                m[inst_id] = {"__origin__": "RANGE"}
         elif op == OP_COMPACT_LIST:
             ln         = r["length"]
             default_v  = r["default_value"]
@@ -149,8 +137,8 @@ class GPEDecoder:
             for idx, val in r.get("exceptions", []):
                 lst[idx] = val
             parent_id  = r["parent_id"]
-            objs[parent_id] = lst
-            meta[parent_id] = {"__origin__": "COMPACT"}
+            o[parent_id] = lst
+            m[parent_id] = {"__origin__": "COMPACT"}
         #  TEMPLATE는 인스턴스 ID 스펙 확정 후 추가 예정
         elif op == "REPEAT":
             count = r.get("count", 0)
@@ -172,16 +160,15 @@ class GPEDecoder:
     # Numba‑accelerated path
     # ==================================================================
     if _NUMBA_AVAIL:
-        def _apply_numba(self, seeds: List[Dict[str, Any]], objs_py: Dict[str, Any], meta_py: Dict[str, Dict[str, Any]]):
+        def _apply_numba(self, rules: List[Dict[str, Any]], objs_py: Dict[str, Any], meta_py: Dict[str, Dict[str, Any]]):
             """Convert py‑dicts to numba typed.Dict & run JIT kernel."""
             from numba import types
             t_objs = typed.Dict.empty(key_type=types.unicode_type, value_type=types.pyobject)
             t_meta = typed.Dict.empty(key_type=types.unicode_type, value_type=types.pyobject)
 
             @njit(cache=False)  # cache=False로 변경
-            def run(seeds_list, objs, meta):
-                for seed in seeds_list:
-                    for rule in seed["rules"]:
+            def run(rule_list, objs, meta):
+                for rule in rule_list:
                         op = rule["op_code"]
                         if op == "NEW":
                             vid = rule["instance_id"]
