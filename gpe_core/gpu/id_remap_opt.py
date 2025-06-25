@@ -4,7 +4,7 @@ import numpy as np
 
 _SRC = (Path(__file__).with_suffix('.cu')).read_text()
 _KERNEL = cp.RawKernel(_SRC, "id_remap_opt",
-                       options=("-I/usr/local/cuda/include", "-use_fast_math", "-O3"))
+                       options=("-I/usr/local/cuda/include", "-use_fast_math"))
 
 def run_remap(chunk: dict[str, np.ndarray]) -> tuple[np.ndarray, np.ndarray]:
     op      = cp.asarray(chunk['op'],       dtype=cp.uint8)
