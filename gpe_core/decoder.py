@@ -67,10 +67,16 @@ class GPEDecoder:
                 flat_rules = rules_or_seeds                              # v1.1
             else:
                 flat_rules = [r for s in rules_or_seeds for r in s.get("rules", [])]  # v1.0
-
+            executed_numba = False
             if self._use_numba:
-                self._apply_numba(flat_rules, objs, meta)
-            else:
+                try:
+                    self._apply_numba(flat_rules, objs, meta)
+                    executed_numba = True
+                except Exception as _nb_err:          # typing error, etc.
+                    # Fallback to pure-python path
+                    executed_numba = False
+
+            if not executed_numba:
                 for rule in flat_rules:
                     self._apply_py(rule, objs, meta)
 
