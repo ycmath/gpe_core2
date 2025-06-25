@@ -7,9 +7,15 @@
 """
 from __future__ import annotations
 import json, copy
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Union
 
 from .models import GpePayload
+
+# 새 OP 코드 세트(v1.1)
+OP_CONSTANT      = "CONSTANT"
+OP_RANGE         = "RANGE"
+OP_COMPACT_LIST  = "COMPACT_LIST"
+OP_TEMPLATE      = "TEMPLATE"      # (미구현·예고)
 
 # ---------------------------------------------------------------------------
 class GPEDecodeError(RuntimeError):
@@ -50,13 +56,31 @@ class GPEDecoder:
             objs: Dict[str, Any] = {}
             meta: Dict[str, Dict[str, Any]] = {}
 
-            # choose apply loop implementation
-            if _NUMBA_AVAIL:
-                self._apply_numba(payload.generative_payload["seeds"], objs, meta)
+            rules_or_seeds: Union[List[Dict[str, Any]], List[Any]] = payload.generative_payload["seeds"]
+
+            # v1.0 = [{"rules":[…]}, …]  /  v1.1 = [{"op_code":…}, …]
+            if rules_or_seeds and "op_code" in rules_or_seeds[0]:
+                flat_rules = rules_or_seeds                              # v1.1
             else:
-                for seed in payload.generative_payload["seeds"]:
-                    for rule in seed.get("rules", []):
-                        self._apply_py(rule, objs, meta)
+                flat_rules = [r for s in rules_or_seeds for r in s.get("rules", [])]  # v1.0
+
+            if _NUMBA_AVAIL:
+                self._apply_numba(flat_rules, objs, meta)
+            else:
+                for rule in flat_rules:
+                    self._apply_py(rule, objs, meta)
+
+            # v1.0 = [{"rules":[…]}, …]  /  v1.1 = [{"op_code":…}, …]
+            if rules_or_seeds and "op_code" in rules_or_seeds[0]:
+                flat_rules = rules_or_seeds                              # v1.1
+            else:
+                flat_rules = [r for s in rules_or_seeds for r in s.get("rules", [])]  # v1.0
+
+            if _NUMBA_AVAIL:
+                self._apply_numba(flat_rules, objs, meta)
+            else:
+                for rule in flat_rules:
+                    self._apply_py(rule, objs, meta)
 
             root_id = payload.generative_payload["root_id"]
             if root_id not in objs:
@@ -107,6 +131,27 @@ class GPEDecoder:
                     parent[key] = child
             else:
                 raise TypeError(f"Cannot append to {type(parent)}")
+        elif op == OP_CONSTANT:
+            value = r["value"]
+            for ref in r.get("references", []):
+                objs[ref] = copy.deepcopy(value)
+                meta[ref] = {"__origin__": "CONST"}
+        elif op == OP_RANGE:
+            start, end, step = r["start"], r["end"], r.get("step", 1)
+            ids = r["instance_ids"]
+            for i, inst_id in enumerate(ids):
+                objs[inst_id] = start + i * step
+                meta[inst_id] = {"__origin__": "RANGE"}
+        elif op == OP_COMPACT_LIST:
+            ln         = r["length"]
+            default_v  = r["default_value"]
+            lst        = [copy.deepcopy(default_v)] * ln
+            for idx, val in r.get("exceptions", []):
+                lst[idx] = val
+            parent_id  = r["parent_id"]
+            objs[parent_id] = lst
+            meta[parent_id] = {"__origin__": "COMPACT"}
+        #  TEMPLATE는 인스턴스 ID 스펙 확정 후 추가 예정
         elif op == "REPEAT":
             count = r.get("count", 0)
             if count <= 0:
