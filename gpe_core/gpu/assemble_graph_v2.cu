@@ -1,4 +1,5 @@
 #include <cuda_runtime.h>
+#include <stdint.h>           // ← 추가
 
 __device__ __forceinline__
 void link_child(uint32_t parent,
@@ -57,20 +58,5 @@ void assemble_graph_v2(const uint8_t*  op,
     }
 }
 
-"""
-Python 래퍼 업데이트 (요약)
-assemble_graph.py 에서 try … RawKernel(... "_v2");
-컴파일 성공 시 KERNEL = v2, 실패하면 기존 _v1 사용.
 
-python
-try:
-    _SRC_V2 = (Path(__file__).with_name("assemble_graph_v2.cu")).read_text()
-    _KERNEL = cp.RawKernel(_SRC_V2, "assemble_graph_v2",
-                           options=("-arch=sm_70",))
-except Exception:
-    # fallback to v1
-    _SRC_V1 = (Path(__file__).with_name("assemble_graph.cu")).read_text()
-    _KERNEL = cp.RawKernel(_SRC_V1, "assemble_graph")
-나머지 호출 코드는 변경 없이 그대로 동작합니다.
-"""
 
