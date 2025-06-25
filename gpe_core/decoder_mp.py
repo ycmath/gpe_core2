@@ -35,7 +35,7 @@ class GPEDecoderMP(GPEDecoder):
     
     @staticmethod
     def _decode_chunk(rules):
-        dec = GPEDecoder()
+        dec = GPEDecoder(use_numba=False)
         o, m = {}, {}
         for r in rules:
             dec._apply_py(r, o, m)
