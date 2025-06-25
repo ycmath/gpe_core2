@@ -37,7 +37,7 @@ class GPEDecoderMP_ShMem(GPEDecoder):
     
     @staticmethod
     def _worker(rules):
-        dec = GPEDecoder(); o, m = {}, {}
+        dec = GPEDecoder(use_numba=False); o, m = {}, {}
         for r in rules:
             dec._apply_py(r, o, m)
         payload = orjson.dumps((o, m))
