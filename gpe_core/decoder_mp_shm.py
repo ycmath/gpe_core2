@@ -25,7 +25,7 @@ class GPEDecoderMP_ShMem(GPEDecoder):
             chunks = [s["rules"] for s in raw]   # v1.0
         ctx = get_context("spawn")
         with ctx.Pool(self.processes) as pool:
-            infos = pool.map(self._worker, seeds)
+            infos = pool.map(self._worker, chunks)
         objs, meta = {}, {}
         for name, size in infos:
             shm = shared_memory.SharedMemory(name=name)
