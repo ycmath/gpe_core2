@@ -66,7 +66,7 @@ python
 try:
     _SRC_V2 = (Path(__file__).with_name("assemble_graph_v2.cu")).read_text()
     _KERNEL = cp.RawKernel(_SRC_V2, "assemble_graph_v2",
-                           options=("-O3", "-arch=sm_70"))
+                           options=("-arch=sm_70",))
 except Exception:
     # fallback to v1
     _SRC_V1 = (Path(__file__).with_name("assemble_graph.cu")).read_text()
