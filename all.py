@@ -1680,7 +1680,7 @@ GPE_PROFILE=1 gpe bench ... 처럼 실행하면 섹션별 누적 함수 시간�
 // -----------------------------------------------------------
 """
 ################################################################################
-# gpe_core/gpu/assemble_graph_v2.cu
+# pyproject.toml
 ################################################################################
 
 #include <cuda_runtime.h>
@@ -1763,7 +1763,102 @@ except Exception:
 # 
 ################################################################################
 
+# pyproject.toml - 수정된 버전
+[build-system]
+requires = ["setuptools>=61.0", "wheel", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
 
+[project]
+name = "gpe-core"
+version = "0.1.0"
+authors = [
+    {name = "YC Math", email = "your-email@example.com"},
+]
+description = "Core library for Generative Payload Encapsulation (GPE) protocol"
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+keywords = ["gpe", "data-exchange", "encoding", "gpu", "acceleration"]
+
+dependencies = [
+    "numpy>=1.21.0",
+    "orjson>=3.8.0",
+    "xxhash>=3.0.0",
+]
+
+[project.optional-dependencies]
+numba = ["numba>=0.56.0"]
+gpu = [
+    "cupy-cuda11x>=11.0.0",  # 또는 cupy-cuda12x
+]
+gpu-multi = [
+    "cupy-cuda11x>=11.0.0",
+    "ray[default]>=2.0.0",
+]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=3.0.0",
+    "black>=22.0.0",
+    "isort>=5.10.0",
+    "flake8>=4.0.0",
+    "mypy>=0.950",
+    "tqdm>=4.65.0",
+]
+all = [
+    "numba>=0.56.0",
+    "cupy-cuda11x>=11.0.0",
+    "ray[default]>=2.0.0",
+    "tqdm>=4.65.0",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/ycmath/gpe_core"
+"Bug Tracker" = "https://github.com/ycmath/gpe_core/issues"
+"Documentation" = "https://github.com/ycmath/gpe_core/wiki"
+
+[project.scripts]
+gpe = "gpe_core.cli:main"
+
+[tool.setuptools]
+packages = ["gpe_core", "gpe_core.gpu", "gpe_core.gpu_multi"]
+include-package-data = true
+
+[tool.setuptools.package-data]
+"gpe_core.gpu" = ["*.cu", "*.cuh"]
+
+[tool.isort]
+profile = "black"
+line_length = 88
+
+[tool.black]
+line-length = 88
+target-version = ['py38', 'py39', 'py310', 'py311']
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = [
+    "cupy.*",
+    "numba.*",
+    "ray.*",
+    "xxhash.*",
+    "orjson.*",
+]
+ignore_missing_imports = true
 
 
 
