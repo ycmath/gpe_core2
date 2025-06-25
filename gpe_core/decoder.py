@@ -72,7 +72,7 @@ class GPEDecoder:
                 try:
                     self._apply_numba(flat_rules, objs, meta)
                     executed_numba = True
-                except Exception as _nb_err:          # typing error, etc.
+                except Exception as nb_err:          # typing error, etc.
                     # Fallback to pure-python path
                     executed_numba = False
 
