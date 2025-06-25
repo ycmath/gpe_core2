@@ -2,12 +2,16 @@
 from __future__ import annotations
 from typing import List, Dict, Any, Tuple, Set, Union
 from collections import defaultdict
-import json
+import json, hashlib, logging
 
 from .models import (
     BaseRule, InstantiateRule, AppendChildRule, RepeatRule,
     ConstantRule, TemplateRule, RangeRule, CompactListRule,
 )
+
+# ── logger (무소음 기본) ───────────────────────────────
+LOGGER = logging.getLogger("gpe.rule_optimizer")
+LOGGER.addHandler(logging.NullHandler())
 
 class RuleOptimizer:
     def __init__(
@@ -44,7 +48,13 @@ class RuleOptimizer:
         out += [r for i, r in enumerate(rules) if i not in processed]
         self.stats["optimized_rules"] = len(out)
         return out
-
+        
+    # ── 공통 유틸 ───────────────────────────────────────
+    def _digest8(self, obj: Any) -> str:
+        """환경 독립적 8-char ID (MD5 of JSON-normalized obj)"""
+        md5 = hashlib.md5(json.dumps(obj, sort_keys=True).encode())
+        return md5.hexdigest()[:8]
+    
     def _analyze_rules(self, rules: List[BaseRule]) -> Dict:
         """규칙 패턴 분석"""
         analysis = {
@@ -76,15 +86,19 @@ class RuleOptimizer:
         for idx, rule in new_rules:
             if 'value' in rule.attributes and rule.attributes['value'] is not None:
                 # JSON으로 정규화하여 비교
-                value_key = json.dumps(rule.attributes['value'], sort_keys=True)
-                value_groups[value_key].append((idx, rule))
+                try:
+                    value_key = json.dumps(rule.attributes['value'], sort_keys=True)
+                    value_groups[value_key].append((idx, rule))
+                except TypeError:
+                    # hash 불가(예: set) → 상수 최적화 건너뜀
+                    LOGGER.debug("Constant-scan skip (unhashable): %s", rule.instance_id)
         
         # 충분히 반복되는 값들을 상수로
         for value_key, group in value_groups.items():
             if len(group) >= self.constant_threshold:
                 value = json.loads(value_key)
                 const_rule = ConstantRule(
-                    value_id=f"const_{abs(hash(value_key)) % 10000000:08x}",
+                    value_id=f"const_{self._digest8(value)}",
                     value=value,
                     references=[rule.instance_id for _, rule in group]
                 )
@@ -239,7 +253,8 @@ class RuleOptimizer:
             
             if children:
                 # 구조 시그니처 생성
-                structure_sig = tuple(sorted(c['key'] for c in children))
+                # key 순서 무시: frozenset 으로 시그니처 고정
+                structure_sig = frozenset(c['key'] for c in children)
                 dict_structures.append({
                     'idx': idx,
                     'rule': dict_rule,
@@ -285,7 +300,7 @@ class RuleOptimizer:
                 
                 # 템플릿 규칙 생성
                 template_rule = TemplateRule(
-                    template_id=f"tmpl_{abs(hash(sig)) % 10000000:08x}",
+                    template_id=f"tmpl_{self._digest8(tuple(sorted(sig)))}",
                     structure=structure,
                     variable_keys=variable_keys,
                     instances=instances
