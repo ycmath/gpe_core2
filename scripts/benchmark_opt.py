@@ -43,15 +43,26 @@ def bench(data):
     }
 
 if __name__ == "__main__":
-    ap = argparse.ArgumentParser()
-    ap.add_argument("json", help="input JSON file")
+    ap = argparse.ArgumentParser(description="GPE v1.0 vs v1.1 성능 벤치마크")
+    ap.add_argument("-i", "--input", help="input JSON file (omit → synthetic)")
+    ap.add_argument("-o", "--out-prefix", default="bench", help="output file prefix")
+    ap.add_argument("--rows", type=int, default=200_000,
+                    help="synthetic rows when --input omitted")
     args = ap.parse_args()
 
-    data = json.load(open(args.json))
+    if args.input:
+        with open(args.input, "r", encoding="utf-8") as fp:
+            data = json.load(fp)
+    else:
+        from random import randint
+        data = [randint(0, 9) for _ in range(args.rows)]
     res  = bench(data)
 
     # CSV 저장
-    with open("bench_results.csv", "w", newline="") as fp:
+    csv_path = f"{args.out_prefix}_results.csv"
+    png_path = f"{args.out_prefix}_plot.png"
+
+    with open(csv_path, "w", newline="") as fp:
         w = csv.writer(fp)
         w.writerow(res.keys()); w.writerow(res.values())
 
@@ -65,5 +76,5 @@ if __name__ == "__main__":
     plt.bar(x, v1, label="v1.1", bottom=v0, alpha=0.6)
     plt.xticks(x, labels); plt.ylabel("count / bytes")
     plt.title("GPE Optimizer Gain"); plt.legend()
-    plt.tight_layout(); plt.savefig("bench_plot.png")   # ← Colab-safe 상대경로
-    print("✓  Results → bench_results.csv / bench_plot.png")
+    plt.tight_layout(); plt.savefig(png_path)
+    print(f"✓  Results saved → {csv_path}, {png_path}")
