@@ -16,12 +16,16 @@ class GPEDecoderMP(GPEDecoder):
             return json.loads(fb["json"])
         raw = payload.generative_payload["seeds"]
 
-        # v1.0 = [{"rules":[…]}, …] ;  v1.1 = [{"op_code":…}, …]
+        # v1.1 은 의존성 보존을 위해 싱글-프로세스 처리
         if raw and "op_code" in raw[0]:
-            # flat list ⇒ 블록 단위로 나눠서 병렬 처리
-            chunk = ceil(len(raw) / self.processes)
-            chunks = [raw[i : i + chunk] for i in range(0, len(raw), chunk)]
-            target = self._decode_chunk        # 새 worker
+            dec = GPEDecoder(use_numba=False)
+            obj = dec.decode(payload)
+            return obj
+        else:+        # v1.1 은 의존성 보존을 위해 싱글-프로세스 처리
+        if raw and "op_code" in raw[0]:
+            dec = GPEDecoder(use_numba=False)
+            obj = dec.decode(payload)
+            return obj
         else:
             chunks = [s["rules"] for s in raw]  # v1.0: 시드별 rules
             target = self._decode_chunk
