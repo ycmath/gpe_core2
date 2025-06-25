@@ -13,6 +13,7 @@ from .models import (
     AttentionSeed,
     GpePayload,
 )
+from .rule_optimizer import RuleOptimizer
 from .encoder import GPEEncoder
 from .decoder import GPEDecoder, GPEDecodeError
 from .decoder_mp import GPEDecoderMP
@@ -38,6 +39,8 @@ __all__ = [
     "RepeatRule",
     "AttentionSeed",
     "GpePayload",
+    "ConstantRule", "TemplateRule", "RangeRule", "CompactListRule",
+    "RuleOptimizer",
     "GPEEncoder",
     "GPEDecoder",
     "GPEDecodeError",
