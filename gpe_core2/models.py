@@ -15,18 +15,12 @@ class ASTNode:
     children: List[str] = field(default_factory=list)
 
 
-# ──────────────────────────────────────────────────────────────
-# 2. Rule Base & Derivatives
-# ──────────────────────────────────────────────────────────────
+ ── Rule base & 파생 ──────────────────────────────────
 @dataclass
 class BaseRule:
-    """
-    공통 Rule 필드 집합
-    * opcode : 규칙 타입 식별자
-    * params : 확장 파라미터 (없을 수 있음)
-    """
-    opcode: str
+    opcode: str                               # ← non-default
     params: Dict[str, Any] = field(default_factory=dict)
+    # class_name 필드 ❌없음❌  << 반드시 제거되어야 함
 
 
 # -- 2-1. AST 조작 규칙 --------------------------------------------------------
