@@ -26,7 +26,8 @@ import orjson
 
 # ---- temporary imports from legacy bundle ----------------------------------
 # In the next sprint these will move into dedicated sub‑modules inside gpe_core2.
-from gpe_core1_compat.ast_builder import ASTBuilder  # type: ignore
+# v2에서는 gpe_core2.ast_builder 를 직접 사용
+from gpe_core2.ast_builder import ASTBuilder
 from gpe_core1_compat.repetition_detector import RepetitionDetector  # type: ignore
 from gpe_core1_compat.seed_generator import SeedGenerator  # type: ignore
 from gpe_core1_compat.models import AttentionSeed, BaseRule, GpePayload  # type: ignore
