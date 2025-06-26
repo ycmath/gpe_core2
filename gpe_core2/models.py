@@ -1,26 +1,36 @@
 # gpe_core2/models.py
 from __future__ import annotations
+
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+# ──────────────────────────────────────────────────────────────
+# 1. AST
+# ──────────────────────────────────────────────────────────────
 @dataclass
 class ASTNode:
-    id: str
-    type: str
-    parent_id: Optional[str] = None
-    children: List[str] = field(default_factory=list)
+    instance_id: str
+    class_name: str
     attributes: Dict[str, Any] = field(default_factory=dict)
+    children: List[str] = field(default_factory=list)
 
+
+# ──────────────────────────────────────────────────────────────
+# 2. Rule Base & Derivatives
+# ──────────────────────────────────────────────────────────────
 @dataclass
-class BaseRule:   # 이미 정의돼 있다면 생략
-    opcode: str
+class BaseRule:
+    opcode: str                              # non-default
     params: Dict[str, Any] = field(default_factory=dict)
-    
+
+
+# -- 2-1. AST 조작 규칙 --------------------------------------------------------
 @dataclass
 class InstantiateRule(BaseRule):
     class_name: str
     instance_id: str
     attributes: Dict[str, Any] = field(default_factory=dict)
+
 
 @dataclass
 class AppendChildRule(BaseRule):
@@ -28,74 +38,71 @@ class AppendChildRule(BaseRule):
     child_id: str
     attribute_name: str = "children"
 
+
 @dataclass
 class RepeatRule(BaseRule):
     count: int
-    instruction: BaseRule  # could be list
-
-@dataclass
-class AttentionSeed:
-    rules: List[BaseRule]
+    instruction: BaseRule
 
 
-@dataclass
-class GpePayload:
-    """
-    Canonical payload object for GPE-v2.
-
-    ▸ `generative_payload`  : 인코더가 생성한 바이트 스트림
-    ▸ `payload_type`        : (선택) "json", "vector", "mixed" … 등 확장 가능
-    ▸ `rules`               : 적용된 Rule 목록 (디코더·디버깅용)
-    ▸ `metadata`            : 캐싱 여부, 압축률 등 부가 메타정보
-    ▸ `fallback_payload`    : 구버전 디코더 호환용 raw JSON
-    """
-    generative_payload: bytes
-
-    # --- Optional / meta ---
-    payload_type: str = "json"
-    rules: List[BaseRule] = field(default_factory=list)
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    fallback_payload: Optional[Dict[str, Any]] = None
-    
-# ===== 최적화 규칙 클래스 =====
-
+# -- 2-2. 최적화 규칙 ----------------------------------------------------------
 @dataclass
 class ConstantRule(BaseRule):
-    """반복 상수 값을 하나의 규칙으로 묶음"""
-    op_code: str = field(default="CONSTANT", init=False)
     value_id: str
     value: Any
     references: List[str] = field(default_factory=list)
 
-@dataclass
-class TemplateRule(BaseRule):
-    """구조는 동일·값만 다른 객체 묶음"""
-    op_code: str = field(default="TEMPLATE", init=False)
-    template_id: str
-    structure: Dict[str, Any]
-    variable_keys: List[str]
-    instances: List[Dict[str, Any]]
+    opcode: str = field(init=False, default="OP_CONST")
+
 
 @dataclass
 class RangeRule(BaseRule):
-    """연속 숫자 시퀀스"""
-    op_code: str = field(default="RANGE", init=False)
     instance_ids: List[str]
     start: Union[int, float]
     end: Union[int, float]
     step: Union[int, float] = 1
 
+    opcode: str = field(init=False, default="OP_RANGE")
+
+
+@dataclass
+class TemplateRule(BaseRule):
+    template_id: str
+    structure: Dict[str, Any]
+    variable_keys: List[str]
+    instances: List[Dict[str, Any]]
+
+    opcode: str = field(init=False, default="OP_TEMPLATE")
+
+
 @dataclass
 class CompactListRule(BaseRule):
-    """희소 리스트를 기본값+예외로 압축"""
-    op_code: str = field(default="COMPACT_LIST", init=False)
     parent_id: str
     length: int
     default_value: Any
     exceptions: List[Tuple[int, Any]] = field(default_factory=list)
 
+    opcode: str = field(init=False, default="OP_COMPACT_LIST")
 
 
+# ──────────────────────────────────────────────────────────────
+# 3. Attention Seed (stub)
+# ──────────────────────────────────────────────────────────────
+@dataclass
+class AttentionSeed:
+    rules: List[BaseRule]
 
 
+# ──────────────────────────────────────────────────────────────
+# 4. GPE Payload
+# ──────────────────────────────────────────────────────────────
+@dataclass
+class GpePayload:
+    """Unified v2 Payload object."""
+    generative_payload: Any                       # bytes | dict
 
+    # optional / meta
+    payload_type: str = "json"
+    rules: List[BaseRule] = field(default_factory=list)
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    fallback_payload: Optional[Dict[str, Any]] = None
