@@ -28,16 +28,16 @@ class ASTNode:
 
 @dataclass
 class BaseRule:
-    opcode: str
-    params: Dict[str, Any] = field(default_factory=dict)   # ★ default 복귀
+    opcode: str                          # non-default
+    params: Dict[str, Any]               # ★ non-default로 변경  (default 제거)
 
 
 # -- 2-1. AST 조작 규칙 --------------------------------------------------------
 @dataclass
 class InstantiateRule(BaseRule):
-    class_name: str
+    class_name: str                      # ok – 여전히 non-default
     instance_id: str
-    attributes: Dict[str, Any] = field(default_factory=dict)
+    attributes: Dict[str, Any] = field(default_factory=dict)  # 최초 default 필드
 
 
 @dataclass
