@@ -1,0 +1,58 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    # 여러 파이썬 버전에서 병렬 실행
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11"]
+
+    services:                # → Redis 7.x 컨테이너
+      redis:
+        image: redis:7-alpine
+        ports: [ "6379:6379" ]
+        options: --health-cmd="redis-cli ping" --health-interval=5s --health-retries=3
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install system packages (optional - redis-cli, cupy deps)
+        run: sudo apt-get update && sudo apt-get install -y redis-tools
+
+      - name: Install project (dev extras)
+        run: |
+          python -m pip install --upgrade pip
+          pip install ".[dev]"      # pyproject.toml extras 사용
+          # GPU 관련 패키지는 CI에서 생략 — cupy wheel 불필요
+          pip list
+
+      # ---------- 코드 스타일 / 정적 분석 ----------
+      - name: Black format check
+        run: black --check .
+
+      - name: isort import order check
+        run: isort --check .
+
+      - name: Ruff linter
+        run: ruff .
+
+      - name: mypy type check
+        run: mypy gpe_core2
+
+      # ---------- 테스트 ----------
+      - name: Run pytest
+        env:
+          # 테스트 과정에서 Redis 호스트 지정 시 사용
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+        run: pytest -q
