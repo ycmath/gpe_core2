@@ -6,7 +6,6 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 # ──────────────────────────────────────────────────────────────
 # 1. AST
-# ──────────────────────────────────────────────────────────────
 @dataclass
 class ASTNode:
     instance_id: str
@@ -14,6 +13,14 @@ class ASTNode:
     attributes: Dict[str, Any] = field(default_factory=dict)
     children: List[str] = field(default_factory=list)
 
+    # ── v1 호환 별칭 ───────────────────────
+    @property
+    def id(self) -> str:          # node.id
+        return self.instance_id
+
+    @property
+    def type(self) -> str:        # node.type
+        return self.class_name
 
 # ──────────────────────────────────────────────────────────────
 # 2. Rule Base & Derivatives
