@@ -3,17 +3,20 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+# ── 공통 AST node ─────────────────────────────────────
 @dataclass
 class ASTNode:
-    id: str
-    type: str
-    parent_id: Optional[str] = None
-    children: List[str] = field(default_factory=list)
+    instance_id: str
+    class_name: str
     attributes: Dict[str, Any] = field(default_factory=dict)
+    children: List[str] = field(default_factory=list)
 
+# ── Rule base & 파생 ──────────────────────────────────
 @dataclass
-class BaseRule:   # 이미 정의돼 있다면 생략
+class BaseRule:
+    """v1 규칙과 호환되는 최소 필드 집합"""
     opcode: str
+    class_name: str                      # ← default 없음이 먼저!
     params: Dict[str, Any] = field(default_factory=dict)
     
 @dataclass
@@ -37,21 +40,13 @@ class RepeatRule(BaseRule):
 class AttentionSeed:
     rules: List[BaseRule]
 
-
+# ── Payload ───────────────────────────────────────────
 @dataclass
 class GpePayload:
-    """
-    Canonical payload object for GPE-v2.
-
-    ▸ `generative_payload`  : 인코더가 생성한 바이트 스트림
-    ▸ `payload_type`        : (선택) "json", "vector", "mixed" … 등 확장 가능
-    ▸ `rules`               : 적용된 Rule 목록 (디코더·디버깅용)
-    ▸ `metadata`            : 캐싱 여부, 압축률 등 부가 메타정보
-    ▸ `fallback_payload`    : 구버전 디코더 호환용 raw JSON
-    """
+    """통합 v2 Payload 객체"""
     generative_payload: bytes
 
-    # --- Optional / meta ---
+    # optional/meta
     payload_type: str = "json"
     rules: List[BaseRule] = field(default_factory=list)
     metadata: Dict[str, Any] = field(default_factory=dict)
