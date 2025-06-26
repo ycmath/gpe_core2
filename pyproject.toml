@@ -56,7 +56,8 @@ Homepage        = "https://github.com/ycmath/gpe_core2"
 Documentation   = "https://github.com/ycmath/gpe_core2/wiki"
 
 [project.scripts]
-gpe = "gpe_core2.cli:main"            # 진입점 모듈 변경
+gpe-orch = "gpe_core2.orchestrator:cli_main"
+
 
 # ──────────────────────────────
 # setuptools 구성
