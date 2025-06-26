@@ -15,22 +15,20 @@ class ASTNode:
     children: List[str] = field(default_factory=list)
 
 
- ── Rule base & 파생 ──────────────────────────────────
+# ──────────────────────────────────────────────────────────────
+# 2. Rule Base & Derivatives
+# ──────────────────────────────────────────────────────────────
 @dataclass
 class BaseRule:
-    opcode: str                               # ← non-default
+    opcode: str                              # non-default
     params: Dict[str, Any] = field(default_factory=dict)
-    # class_name 필드 ❌없음❌  << 반드시 제거되어야 함
 
 
 # -- 2-1. AST 조작 규칙 --------------------------------------------------------
 @dataclass
 class InstantiateRule(BaseRule):
-    """
-    새 노드 인스턴스 생성 규칙
-    """
-    class_name: str           # non-default
-    instance_id: str          # non-default
+    class_name: str
+    instance_id: str
     attributes: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -54,8 +52,7 @@ class ConstantRule(BaseRule):
     value: Any
     references: List[str] = field(default_factory=list)
 
-    # opcode 고정값 – BaseRule(opcode, params)를 오버라이드
-    opcode: str = field(init=False, default="CONSTANT")
+    opcode: str = field(init=False, default="OP_CONST")
 
 
 @dataclass
@@ -65,7 +62,7 @@ class RangeRule(BaseRule):
     end: Union[int, float]
     step: Union[int, float] = 1
 
-    opcode: str = field(init=False, default="RANGE")
+    opcode: str = field(init=False, default="OP_RANGE")
 
 
 @dataclass
@@ -75,7 +72,7 @@ class TemplateRule(BaseRule):
     variable_keys: List[str]
     instances: List[Dict[str, Any]]
 
-    opcode: str = field(init=False, default="TEMPLATE")
+    opcode: str = field(init=False, default="OP_TEMPLATE")
 
 
 @dataclass
@@ -85,11 +82,11 @@ class CompactListRule(BaseRule):
     default_value: Any
     exceptions: List[Tuple[int, Any]] = field(default_factory=list)
 
-    opcode: str = field(init=False, default="COMPACT_LIST")
+    opcode: str = field(init=False, default="OP_COMPACT_LIST")
 
 
 # ──────────────────────────────────────────────────────────────
-# 3. Attention Seed (간이 정의)
+# 3. Attention Seed (stub)
 # ──────────────────────────────────────────────────────────────
 @dataclass
 class AttentionSeed:
@@ -101,15 +98,8 @@ class AttentionSeed:
 # ──────────────────────────────────────────────────────────────
 @dataclass
 class GpePayload:
-    """
-    통합 v2 Payload
-    • generative_payload : 실제 전송 바이트
-    • payload_type       : "json" / "vector" / …
-    • rules              : 적용된 Rule 목록
-    • metadata           : 캐싱 여부 등
-    • fallback_payload   : 레거시 JSON
-    """
-    generative_payload: bytes                                # non-default
+    """Unified v2 Payload object."""
+    generative_payload: Any                       # bytes | dict
 
     # optional / meta
     payload_type: str = "json"
