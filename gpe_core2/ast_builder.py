@@ -1,3 +1,5 @@
+from __future__ import annotations
+import itertools                   # ★ 추가
 from itertools import count
 import json, hashlib
 from typing import Any, Dict
