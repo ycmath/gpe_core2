@@ -34,8 +34,12 @@ class ASTBuilder:
             if isinstance(obj, (dict, list)) else repr(obj).encode()
         )
         h = _fast_hash(pay).hex()[:32]
-        node = ASTNode(id=nid, type=ntype, parent_id=parent,
-                       attributes={"hash": h, "value": None})
+        node = ASTNode(
+            instance_id=nid,
+            class_name=ntype,
+            attributes={"hash": h, "value": None},
+            children=[],
+        )
         self.nodes[nid] = node
         if isinstance(obj, dict):
             for k, v in obj.items():
