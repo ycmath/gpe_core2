@@ -15,10 +15,10 @@ except ModuleNotFoundError:
 
 class ASTBuilder:
     def __init__(self):
-        self.nodes: Dict[str, ASTNode] = {}
-        self._ctr = count()  # 인스턴스 변수로 이동
-    
-    def build(self, obj: Any) -> str:
+        self.nodes: dict[str, ASTNode] = {}   # ← dict
+        self._ctr = itertools.count()
+
+    def build(self, obj):
         return self._visit(obj, None)
     
     # ------------------------------------------------------------------
@@ -40,7 +40,7 @@ class ASTBuilder:
             attributes={"hash": h, "value": None},
             children=[],
         )
-        self.nodes[nid] = node
+        self.nodes[nid] = node     # ← dict 저장
         if isinstance(obj, dict):
             for k, v in obj.items():
                 cid = self._visit(v, nid)
