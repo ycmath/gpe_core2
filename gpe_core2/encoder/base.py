@@ -28,9 +28,9 @@ import orjson
 # In the next sprint these will move into dedicated sub‑modules inside gpe_core2.
 # v2에서는 gpe_core2.ast_builder 를 직접 사용
 from gpe_core2.ast_builder import ASTBuilder
-from gpe_core1_compat.repetition_detector import RepetitionDetector  # type: ignore
-from gpe_core1_compat.seed_generator import SeedGenerator  # type: ignore
-from gpe_core1_compat.models import AttentionSeed, BaseRule, GpePayload  # type: ignore
+from gpe_core2.repetition_detector import RepetitionDetector
+from gpe_core2.seed_generator import SeedGenerator
+from gpe_core2.models import AttentionSeed, BaseRule, GpePayload
 
 # ---- new modules -----------------------------------------------------------
 from gpe_core2.rule_optimizer import select_rules
