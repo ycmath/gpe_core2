@@ -1,71 +1,111 @@
 # gpe_core2/rule_optimizer.py
 """
-Hint-driven rule-selection engine.
+Hint-driven + pattern-scanning Rule Optimizer  (v2-lite)
 
-`select_rules(data, hints)` 는
-- `data` : Python object (dict / list / scalar …)
-- `hints`: Optional[Mapping[str, Any]] ; GlassBox 가 넣어준 통계 정보
-
-반환값은 encode 단계에서 적용할 압축 Rule 리스트.
+▪ GlassBox 가 넘겨준 hints 로 “빠른 결정”
+▪ 부족할 경우 v1 휴리스틱으로 패턴 탐색
+▪ 범위: Constant / Numeric Range / VectorRange  (S-4 확장 예정)
 """
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any, List
 
-__all__ = ["select_rules"]
+__all__ = ["select_rules", "RuleOptimizerLite"]
+
+# ── Rule opcode 상수 ──────────────────────────────────────────────────────────
+OP_CONST = "OP_CONST"                # 동일 값 반복
+OP_RANGE = "OP_RANGE"                # 연속 숫자
+OP_VEC_RANGE = "OP_VECTOR_RANGE"     # 연속·근접 벡터(S-4)
+
+# ── 내부 유틸 ─────────────────────────────────────────────────────────────────
+def _unique_count(seq: Sequence[Any]) -> int:
+    try:
+        return len(set(seq))
+    except TypeError:
+        # 리스트·딕셔너리처럼 unhashable 값이 섞인 경우
+        return len({repr(v) for v in seq})
 
 
-# ――― rule constants (추후 utils.constants 로 이동 가능) ―――
-CONST_RULE = "OP_CONST"          # 고정 상수
-RANGE_RULE = "OP_RANGE"          # 숫자 범위
-VEC_RANGE_RULE = "OP_VECTOR_RANGE"  # S-4 에서 구현
+def _is_const(seq: Sequence[Any], threshold: int) -> bool:
+    return _unique_count(seq) <= threshold
 
 
-def _is_constant_field(values: list[Any], cardinality_hint: int | None) -> bool:
-    """모든 값이 1~`cardinality_hint` 개 이내라면 CONST_RULE 적용."""
-    unique_cnt = len({*values})
-    if cardinality_hint is not None:
-        return unique_cnt <= cardinality_hint
-    return unique_cnt == 1
+def _is_numeric_range(seq: Sequence[Any], min_len: int = 5) -> bool:
+    """strict ↑↓ 1 step range 검출"""
+    if len(seq) < min_len or not all(isinstance(v, (int, float)) for v in seq):
+        return False
+    start = seq[0]
+    for i, v in enumerate(seq[1:], start=1):
+        if v != start + i:
+            return False
+    return True
 
 
-def select_rules(data: Any, hints: Mapping[str, Any] | None = None) -> List[str]:
-    """
-    Very-light heuristic v0:
+# ── 핵심 Optimizer 클래스 ────────────────────────────────────────────────────
+class RuleOptimizerLite:
+    def __init__(
+        self,
+        constant_threshold: int = 3,
+        range_min_length: int = 5,
+    ) -> None:
+        self.constant_threshold = constant_threshold
+        self.range_min_length = range_min_length
 
-    • dict → key 단위로 필드별 분석
-    • list[int/float] + hints["is_vector"] → VEC_RANGE_RULE 후보
-    • 숫자·bool 등 스칼라 반복 → CONST_RULE
+    # public -----------------------------------------------------------------
+    def select_rules(
+        self,
+        data: Any,
+        hints: Mapping[str, Any] | None = None,
+    ) -> List[str]:
+        """
+        1) 힌트 기반 빠른 판단
+        2) dict / list 패턴 스캔
+        3) fallback: OP_RANGE
+        """
+        if hints is None:
+            hints = {}
 
-    Returns ordered list of rule-codes to try.
-    """
-    rules: List[str] = []
+        # ── 1. 힌트 기반 ────────────────────────────────────
+        if hints.get("is_vector"):
+            return [OP_VEC_RANGE]
 
-    if hints is None:
-        hints = {}
+        if card := hints.get("cardinality"):
+            if card <= self.constant_threshold:
+                return [OP_CONST]
 
-    # Vector hint
-    if hints.get("is_vector"):
-        rules.append(VEC_RANGE_RULE)
+        if hints.get("range_span") and hints["range_span"] >= self.range_min_length:
+            return [OP_RANGE]
 
-    # Constant hint (cardinality)
-    card_hint = hints.get("cardinality")  # e.g., 3
-    if isinstance(data, list):
-        if _is_constant_field(data, card_hint):
-            rules.append(CONST_RULE)
-        else:
-            rules.append(RANGE_RULE)
-    elif isinstance(data, (int, float, bool, str)):
-        # scalar field
-        rules.append(CONST_RULE)
-    elif isinstance(data, dict):
-        # dict → check values collectively
-        values = list(data.values())
-        if _is_constant_field(values, card_hint):
-            rules.append(CONST_RULE)
+        # ── 2. 데이터 패턴 스캔 ─────────────────────────────
+        rules: List[str] = []
+        if isinstance(data, list):
+            if _is_const(data, self.constant_threshold):
+                rules.append(OP_CONST)
+            elif _is_numeric_range(data, self.range_min_length):
+                rules.append(OP_RANGE)
 
-    # fallback
-    if not rules:
-        rules.append(RANGE_RULE)
-    return rules
+        elif isinstance(data, dict):
+            if _is_const(list(data.values()), self.constant_threshold):
+                rules.append(OP_CONST)
+
+        elif isinstance(data, (int, float, bool, str)):
+            rules.append(OP_CONST)
+
+        # ── 3. fallback ───────────────────────────────────
+        if not rules:
+            rules.append(OP_RANGE)
+
+        return rules
+
+
+# ── procedural facade (v1 호환) ───────────────────────────────────────────────
+_optimizer_singleton = RuleOptimizerLite()
+
+
+def select_rules(
+    data: Any,
+    hints: Mapping[str, Any] | None = None,
+) -> List[str]:
+    """Functional wrapper → 기존 encode() 코드와 인터페이스 동일."""
+    return _optimizer_singleton.select_rules(data, hints)
