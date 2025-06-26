@@ -29,7 +29,7 @@ class ASTNode:
 @dataclass
 class BaseRule:
     opcode: str                         # non-default
-    params: Dict[str, Any] = field(default_factory=dict)  # ← 다시 default 허용
+    params: Dict[str, Any]
 
 
 # -- 2-1. AST 조작 규칙 --------------------------------------------------------
