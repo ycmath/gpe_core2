@@ -56,6 +56,7 @@ class SeedGenerator:
                 opcode="NEW",                   # ← 필드명 수정
                 class_name=node.type,
                 instance_id=node.id,
+                params={},                              # ★ 추가
                 attributes={k: v for k, v in node.attributes.items() if k != "hash"},
             )
         ]
