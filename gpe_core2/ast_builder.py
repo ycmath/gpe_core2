@@ -1,3 +1,5 @@
+from __future__ import annotations
+import itertools                   # ★ 추가
 from itertools import count
 import json, hashlib
 from typing import Any, Dict
@@ -15,10 +17,10 @@ except ModuleNotFoundError:
 
 class ASTBuilder:
     def __init__(self):
-        self.nodes: Dict[str, ASTNode] = {}
-        self._ctr = count()  # 인스턴스 변수로 이동
-    
-    def build(self, obj: Any) -> str:
+        self.nodes: dict[str, ASTNode] = {}   # ← dict
+        self._ctr = itertools.count()
+
+    def build(self, obj):
         return self._visit(obj, None)
     
     # ------------------------------------------------------------------
@@ -34,9 +36,13 @@ class ASTBuilder:
             if isinstance(obj, (dict, list)) else repr(obj).encode()
         )
         h = _fast_hash(pay).hex()[:32]
-        node = ASTNode(id=nid, type=ntype, parent_id=parent,
-                       attributes={"hash": h, "value": None})
-        self.nodes[nid] = node
+        node = ASTNode(
+            instance_id=nid,
+            class_name=ntype,
+            attributes={"hash": h, "value": None},
+            children=[],
+        )
+        self.nodes[nid] = node     # ← dict 저장
         if isinstance(obj, dict):
             for k, v in obj.items():
                 cid = self._visit(v, nid)

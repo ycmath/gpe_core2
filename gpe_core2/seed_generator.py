@@ -1,4 +1,7 @@
+# gpe_core2/seed_generator.py  (수정/교체)
+
 from __future__ import annotations
+
 from typing import Dict, List, Set
 
 from .models import (
@@ -10,64 +13,91 @@ from .models import (
     RepeatRule,
 )
 
+
 class SeedGenerator:
     """Generate rule trees with **nested RepeatRule** support."""
 
+    # ────────────────────────────────────────────────────────────
     def __init__(self, nodes: Dict[str, ASTNode], groups: Dict[str, List[str]]):
-        self.nodes = nodes                      # AST node table
-        self.groups = groups                    # hash → [node_ids]
+        self.nodes = nodes          # AST node table
+        self.groups = groups        # hash → [node_ids]
 
-        # Map every node id → its repetition group (if any)
-        self._grp_of: Dict[str, List[str]] = {}
-        for lst in groups.values():
-            for nid in lst:
-                self._grp_of[nid] = lst
+        # node_id → 그 노드가 속한 반복 그룹(List[str])
+        self._grp_of: Dict[str, List[str]] = {
+            nid: lst for lst in groups.values() for nid in lst
+        }
+        self._seen_repeat: Set[str] = set()  # 이미 RepeatRule을 만든 그룹 리더
 
-        self._seen_repeat: Set[str] = set()     # group leaders already emitted
-
-    # ------------------------------------------------------------------
+    # ────────────────────────────────────────────────────────────
     def generate(self, root_id: str | None = None) -> List[AttentionSeed]:
-        """Return *one* AttentionSeed covering the whole AST (root‑aligned)."""
+        """Return *one* AttentionSeed covering the whole AST."""
         if root_id is None:
-            # pick the lexicographically smallest id as root (ASTBuilder behaves that way)
-            root_id = min(self.nodes)
+            root_id = min(self.nodes)  # lexicographically smallest
         rules = self._emit(root_id)
         return [AttentionSeed(rules=rules)]
 
-    # ------------------------------------------------------------------
+    # ────────────────────────────────────────────────────────────
     def _emit(self, nid: str) -> List[BaseRule]:
-        # If this node belongs to a repeat group AND we haven't emitted it yet
-        if nid in self._grp_of and self._grp_of[nid][0] == nid and nid not in self._seen_repeat:
+        """
+        그룹 리더라면 RepeatRule 한 방으로 압축,
+        아니면 평소대로 서브트리 방출.
+        """
+        if (
+            nid in self._grp_of
+            and self._grp_of[nid][0] == nid        # 그룹의 첫 번째=리더
+            and nid not in self._seen_repeat
+        ):
             grp = self._grp_of[nid]
             self._seen_repeat.update(grp)
             template_rules = self._emit_subtree(nid, emit_repeat=False)
-            return [RepeatRule(op_code="REPEAT", count=len(grp), instruction=template_rules)]
+            return [
+                RepeatRule(
+                    opcode="REPEAT",
+                    params={},
+                    count=len(grp),
+                    instruction=template_rules,
+                )
+            ]
         else:
-            # normal path (including inner nodes inside a larger Repeat)
+            # 일반 노드
             return self._emit_subtree(nid, emit_repeat=True)
 
-    # ------------------------------------------------------------------
+    # ────────────────────────────────────────────────────────────
     def _emit_subtree(self, nid: str, *, emit_repeat: bool) -> List[BaseRule]:
-        """Return rules for a subtree. emit_repeat=False means we are already
-        inside a Repeat template; we must not nest again."""
+        """emit_repeat=False → 이미 Repeat 컨텍스트 안임."""
         node = self.nodes[nid]
+
         rules: List[BaseRule] = [
             InstantiateRule(
-                op_code="NEW",
-                class_name=node.type,
-                instance_id=node.id,
-                attributes={k: v for k, v in node.attributes.items() if k != "hash"},
+                opcode="NEW",
+                params={},
+                class_name=node.class_name,      # ASTNode 별칭 사용
+                instance_id=node.instance_id,
+                attributes={
+                    k: v for k, v in node.attributes.items() if k != "hash"
+                },
             )
         ]
 
         for child_id in node.children:
-            # Skip other instances that will be covered by a Repeat emitted elsewhere
-            if child_id in self._grp_of and self._grp_of[child_id][0] != child_id and self._grp_of[child_id][0] in self._seen_repeat:
+            # 이미 RepeatRule로 처리될 자식은 스킵
+            leader = self._grp_of.get(child_id, [None])[0]
+            if leader != child_id and leader in self._seen_repeat:
                 continue
-            # recurse — possibly emitting nested Repeat
+
+            # 재귀
             if emit_repeat:
                 rules.extend(self._emit(child_id))
             else:
                 rules.extend(self._emit_subtree(child_id, emit_repeat=False))
-            rules.append(AppendChildRule(op_code="APPEND", parent_id=nid, child_id=child_id))
+
+            rules.append(
+                AppendChildRule(
+                    opcode="APPEND",
+                    params={},
+                    parent_id=nid,
+                    child_id=child_id,
+                )
+            )
+
         return rules
