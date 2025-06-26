@@ -41,7 +41,7 @@ class SeedGenerator:
             grp = self._grp_of[nid]
             self._seen_repeat.update(grp)
             template_rules = self._emit_subtree(nid, emit_repeat=False)
-            return [RepeatRule(op_code="REPEAT", count=len(grp), instruction=template_rules)]
+            return [RepeatRule(opcode="REPEAT", count=len(grp), instruction=template_rules)]
         else:
             # normal path (including inner nodes inside a larger Repeat)
             return self._emit_subtree(nid, emit_repeat=True)
@@ -53,7 +53,7 @@ class SeedGenerator:
         node = self.nodes[nid]
         rules: List[BaseRule] = [
             InstantiateRule(
-                op_code="NEW",
+                opcode="NEW",                   # ← 필드명 수정
                 class_name=node.type,
                 instance_id=node.id,
                 attributes={k: v for k, v in node.attributes.items() if k != "hash"},
@@ -69,5 +69,5 @@ class SeedGenerator:
                 rules.extend(self._emit(child_id))
             else:
                 rules.extend(self._emit_subtree(child_id, emit_repeat=False))
-            rules.append(AppendChildRule(op_code="APPEND", parent_id=nid, child_id=child_id))
+            rules.append(AppendChildRule(opcode="APPEND", parent_id=nid, child_id=child_id))
         return rules
