@@ -56,7 +56,6 @@ class SeedGenerator:
                 opcode="NEW",                   # ← 필드명 수정
                 class_name=node.type,
                 instance_id=node.id,
-                params={},                              # ★ 추가
                 attributes={k: v for k, v in node.attributes.items() if k != "hash"},
             )
         ]
@@ -71,4 +70,7 @@ class SeedGenerator:
             else:
                 rules.extend(self._emit_subtree(child_id, emit_repeat=False))
             rules.append(AppendChildRule(opcode="APPEND", parent_id=nid, child_id=child_id))
+        
+            # RepeatRule 생성부도 params 생략 가능
+            RepeatRule(opcode="REPEAT", count=len(grp), instruction=template_rules)
         return rules
