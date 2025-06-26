@@ -28,8 +28,8 @@ class ASTNode:
 
 @dataclass
 class BaseRule:
-    opcode: str                         # non-default
-    params: Dict[str, Any]
+    opcode: str
+    params: Dict[str, Any] = field(default_factory=dict)   # ★ default 복귀
 
 
 # -- 2-1. AST 조작 규칙 --------------------------------------------------------
