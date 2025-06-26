@@ -21,4 +21,4 @@ def test_constant_cardinality_hint():
 
     # 4. Inspect generative rules – must contain at least one CONST rule
     rules = payload.generative_payload["rules"]
-    assert any(r.get("op_code") == "OP_CONST" for r in rules)
+    assert any(r.get("opcode") == "OP_CONST" for r in rules)
