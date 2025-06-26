@@ -116,8 +116,8 @@ def _optimise_rules(rules: list[BaseRule], hints: Mapping[str, Any]) -> list[Bas
     for r in rules:
         candidate_ops = select_rules(r, hints)
         # simplistic policy: take the first suggested op if different
-        if candidate_ops and candidate_ops[0] != r.op_code:
-            r = r._replace(op_code=candidate_ops[0])  # type: ignore
+        if candidate_ops and candidate_ops[0] != r.opcode:
+            r = r._replace(opcode=candidate_ops[0])  # type: ignore
         optimised.append(r)
     return optimised
 
