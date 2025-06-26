@@ -1,96 +1,102 @@
-# pyproject.toml - 수정된 버전
+# pyproject.toml — gpe_core2 (v2-dev)
+
 [build-system]
-requires = ["setuptools>=61.0", "wheel", "setuptools-scm"]
-build-backend = "setuptools.build_meta"
+requires       = ["setuptools>=61.0", "wheel", "setuptools-scm"]
+build-backend  = "setuptools.build_meta"
 
 [project]
-name = "gpe-core"
-version = "1.1.0a0"
-authors = [
-    {name = "YC Math", email = "your-email@example.com"},
+name           = "gpe-core2"                # 🔄 v1→v2 패키지명 구분
+version        = "2.0.0a0"
+authors        = [{ name = "YC Math", email = "your-email@example.com" }]
+description    = "CGA-optimised Generative Payload Encapsulation core library"
+readme         = "README.md"
+requires-python = ">=3.10"                  # CUDA 12x wheel은 py310+ 권장
+keywords       = ["gpe", "cga", "data-exchange", "gpu", "zerocopy"]
+classifiers    = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
 ]
-description = "Core library for Generative Payload Encapsulation (GPE) protocol"
-readme = "README.md"
-requires-python = ">=3.9"
-classifiers = [
-    "Development Status :: 3 - Alpha",
-    "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-]
-keywords = ["gpe", "data-exchange", "encoding", "gpu", "acceleration"]
 
+# ──────────────────────────────
+# 런타임 필수 의존성
+# ──────────────────────────────
 dependencies = [
-    "numpy>=1.23",
-    "orjson>=3.9",
-    "xxhash>=3.4",
+  "numpy>=1.24",            # CuPy 12x wheel과 호환
+  "orjson>=3.9",
+  "xxhash>=3.4",
+  "redis>=5.0",             # ★ A. Expressway Hash-Lane
+  "torch>=2.2; extra == \"gpu\"",  # ★ D. zero-copy (선택)
 ]
-
 
 [project.optional-dependencies]
-numba = ["numba>=0.56.0"]
-gpu   = ["cupy-cuda11x"]    # CUDA 11
-gpu12 = ["cupy-cuda12x"]    # CUDA 12
-gpu-multi = [
-    "cupy-cuda11x>=11.0.0",
-    "ray[default]>=2.0.0",
+# GPU flavour를 선택식으로 분리
+gpu11    = ["cupy-cuda11x>=12.0.0"]
+gpu12    = ["cupy-cuda12x>=12.0.0"]
+dev      = [
+  "pytest>=8",
+  "pytest-cov>=5.0",
+  "black>=24.3",
+  "ruff>=0.4",
+  "isort>=5.13",
+  "flake8>=7.0",
+  "mypy>=1.10",
+  "tqdm>=4.66",
 ]
-dev = [
-    "pytest>=7",
-    "pytest-cov>=3.0.0",
-    "black>=24.3",
-    "ruff>=0.3",
-    "isort>=5.10.0",
-    "flake8>=4.0.0",
-    "mypy>=0.950",
-    "tqdm>=4.65.0",
-]
-all = [
-    "numba>=0.56.0",
-    "cupy-cuda11x>=11.0.0",
-    "ray[default]>=2.0.0",
-    "tqdm>=4.65.0",
-]
+all      = ["gpe-core2[gpu12,dev]"]   # one-shot 설치용
 
 [project.urls]
-"Homepage" = "https://github.com/ycmath/gpe_core"
-"Bug Tracker" = "https://github.com/ycmath/gpe_core/issues"
-"Documentation" = "https://github.com/ycmath/gpe_core/wiki"
+Homepage        = "https://github.com/ycmath/gpe_core2"
+"Bug Tracker"   = "https://github.com/ycmath/gpe_core2/issues"
+Documentation   = "https://github.com/ycmath/gpe_core2/wiki"
 
 [project.scripts]
-gpe = "gpe_core.cli:main"
+gpe = "gpe_core2.cli:main"            # 진입점 모듈 변경
 
+# ──────────────────────────────
+# setuptools 구성
+# ──────────────────────────────
 [tool.setuptools]
-packages = ["gpe_core", "gpe_core.gpu", "gpe_core.gpu_multi"]
+packages = [
+  "gpe_core2",
+  "gpe_core2.encoder",
+  "gpe_core2.decoder",
+  "gpe_core2.utils",
+  "gpe_core2.glassbox",
+]
+
 include-package-data = true
 
 [tool.setuptools.package-data]
-"gpe_core.gpu" = ["*.cu", "*.cuh"]
+"gpe_core2.decoder" = ["*.cu", "*.cuh"]   # GPU 커널이 있을 경우
 
+# ──────────────────────────────
+# 개발 도구 설정
+# ──────────────────────────────
 [tool.isort]
-profile = "black"
-line_length = 88
+profile      = "black"
+line_length  = 88
 
 [tool.black]
-line-length = 88
-target-version = ['py38', 'py39', 'py310', 'py311']
+line-length      = 88
+target-version   = ["py310", "py311", "py312"]
 
 [tool.mypy]
-python_version = "3.9"
-warn_return_any = true
-warn_unused_configs = true
+python_version         = "3.10"
+strict_optional        = true
+warn_unused_configs    = true
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = [
-    "cupy.*",
-    "numba.*",
-    "ray.*",
-    "xxhash.*",
-    "orjson.*",
+  "cupy.*",
+  "torch.*",
+  "redis.*",
+  "orjson.*",
+  "xxhash.*",
 ]
 ignore_missing_imports = true
