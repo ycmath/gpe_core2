@@ -18,10 +18,11 @@ class ASTNode:
 # ──────────────────────────────────────────────────────────────
 # 2. Rule Base & Derivatives
 # ──────────────────────────────────────────────────────────────
+
 @dataclass
 class BaseRule:
-    opcode: str                              # non-default
-    params: Dict[str, Any] = field(default_factory=dict)
+    opcode: str                         # non-default
+    params: Dict[str, Any]              # ★ default 제거 → non-default
 
 
 # -- 2-1. AST 조작 규칙 --------------------------------------------------------
