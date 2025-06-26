@@ -1,7 +1,7 @@
 from itertools import count
 import json, hashlib
 from typing import Any, Dict
-from .models import ASTNode  # 추가 필요!
+from gpe_core2.models import ASTNode
 
 try:
     import xxhash  # type: ignore
